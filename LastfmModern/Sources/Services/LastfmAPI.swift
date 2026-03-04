@@ -24,6 +24,7 @@ protocol LastfmAPI {
     func nowPlaying(_ track: Track) async throws
     func scrobble(_ track: Track) async throws
     func love(track: String, artist: String) async throws
+    func unlove(track: String, artist: String) async throws
     func fetchTrackDetails(artist: String, track: String) async throws -> LastfmTrackDetails
     func fetchArtistDetails(artist: String) async throws -> LastfmArtistDetails
     func fetchUserProfile() async throws -> LastfmUserProfile
@@ -226,6 +227,7 @@ final class LastfmAPIClient: LastfmAPI {
     private let urlSession: URLSession
     private var session: LastfmSession?
     private var endpointCache: [String: EndpointCacheEntry] = [:]
+    private let endpointCacheLock = NSLock()
 
     init(config: LastfmAPIConfig, urlSession: URLSession = .shared) {
         self.config = config
@@ -331,6 +333,17 @@ final class LastfmAPIClient: LastfmAPI {
         let sk = try requireSessionKey()
         var params: [String: String] = [
             "method": "track.love",
+            "track": track,
+            "artist": artist,
+            "sk": sk
+        ]
+        _ = try await send(params: &params, cachePolicy: .none)
+    }
+
+    func unlove(track: String, artist: String) async throws {
+        let sk = try requireSessionKey()
+        var params: [String: String] = [
+            "method": "track.unlove",
             "track": track,
             "artist": artist,
             "sk": sk
@@ -496,7 +509,7 @@ final class LastfmAPIClient: LastfmAPI {
             let imageURL = imageURL(item["image"])
             let url = firstString(item["url"])
             let loved = firstString(item["loved"]) == "1"
-            let nowPlaying = firstString(attr?["nowplaying"]) == "true"
+            let nowPlaying = boolValue(attr?["nowplaying"])
             return LastfmRecentScrobble(
                 id: "\(artistName)|\(trackName)|\(uts ?? UUID().uuidString)",
                 track: trackName,
@@ -513,7 +526,7 @@ final class LastfmAPIClient: LastfmAPI {
 
     func fetchFriendsListening(limit: Int = 50) async throws -> [LastfmFriendListening] {
         let user = try requireSessionName()
-        let cappedLimit = min(max(1, limit), 200)
+        let cappedLimit = min(max(1, limit), 1000)
         let pageSize = min(50, cappedLimit)
         let maxPages = Int(ceil(Double(cappedLimit) / Double(pageSize)))
         var collected: [LastfmFriendListening] = []
@@ -544,14 +557,14 @@ final class LastfmAPIClient: LastfmAPI {
                 let name = firstString(user["name"]) ?? "Unknown User"
                 let realname = firstString(user["realname"])
                 let country = firstString(user["country"])
-                let isSubscriber = firstString(user["subscriber"]) == "1"
+                let isSubscriber = boolValue(user["subscriber"])
                 let avatarURL = imageURL(user["image"])
                 let recentTrack = recentTrackObject(user["recenttrack"])
                 let track = firstString(recentTrack?["name"])
                 let artist = firstString(recentTrack?["artist"])
                 let imageURL = imageURL(recentTrack?["image"])
                 let attr = recentTrack?["@attr"] as? [String: Any]
-                let nowPlaying = firstString(attr?["nowplaying"]) == "true"
+                let nowPlaying = boolValue(attr?["nowplaying"])
                 let date = recentTrack?["date"] as? [String: Any]
                 let playedAt = firstString(date?["uts"]).flatMap(TimeInterval.init).map(Date.init(timeIntervalSince1970:))
 
@@ -574,8 +587,127 @@ final class LastfmAPIClient: LastfmAPI {
                 break
             }
         }
+        var deduped: [String: LastfmFriendListening] = [:]
+        for friend in collected {
+            let key = friend.user.lowercased()
+            guard let existing = deduped[key] else {
+                deduped[key] = friend
+                continue
+            }
+            if friend.nowPlaying && !existing.nowPlaying {
+                deduped[key] = friend
+                continue
+            }
+            let lhs = friend.playedAt ?? .distantPast
+            let rhs = existing.playedAt ?? .distantPast
+            if lhs > rhs {
+                deduped[key] = friend
+            }
+        }
 
-        return Array(collected.prefix(cappedLimit))
+        var merged = deduped.values.sorted {
+            if $0.nowPlaying != $1.nowPlaying {
+                return $0.nowPlaying && !$1.nowPlaying
+            }
+            let lhs = $0.playedAt ?? .distantPast
+            let rhs = $1.playedAt ?? .distantPast
+            if lhs != rhs {
+                return lhs > rhs
+            }
+            return $0.user.localizedCaseInsensitiveCompare($1.user) == .orderedAscending
+        }
+        if merged.count > cappedLimit {
+            merged = Array(merged.prefix(cappedLimit))
+        }
+
+        let candidates = merged
+            .filter { !$0.nowPlaying }
+            .sorted { ($0.playedAt ?? .distantPast) > ($1.playedAt ?? .distantPast) }
+        let hydrationCap = min(cappedLimit, candidates.count)
+        let hydrationBatchSize = 25
+        if hydrationCap > 0 {
+            var freshByUser: [String: (track: String?, artist: String?, imageURL: String?, playedAt: Date?, nowPlaying: Bool)] = [:]
+            let hydrationCandidates = Array(candidates.prefix(hydrationCap))
+            for start in stride(from: 0, to: hydrationCandidates.count, by: hydrationBatchSize) {
+                let end = min(start + hydrationBatchSize, hydrationCandidates.count)
+                let batch = hydrationCandidates[start..<end]
+                await withTaskGroup(of: (String, (track: String?, artist: String?, imageURL: String?, playedAt: Date?, nowPlaying: Bool)?).self) { group in
+                    for friend in batch {
+                        let user = friend.user
+                        group.addTask {
+                            let fresh = try? await self.fetchLatestFriendTrack(user: user)
+                            return (user.lowercased(), fresh)
+                        }
+                    }
+                    for await result in group {
+                        if let fresh = result.1 {
+                            freshByUser[result.0] = fresh
+                        }
+                    }
+                }
+            }
+            merged = merged.map { friend in
+                guard let fresh = freshByUser[friend.user.lowercased()] else {
+                    return friend
+                }
+                return LastfmFriendListening(
+                    id: friend.id,
+                    user: friend.user,
+                    realname: friend.realname,
+                    country: friend.country,
+                    isSubscriber: friend.isSubscriber,
+                    avatarURL: friend.avatarURL,
+                    track: fresh.track ?? friend.track,
+                    artist: fresh.artist ?? friend.artist,
+                    imageURL: fresh.imageURL ?? friend.imageURL,
+                    playedAt: fresh.playedAt ?? friend.playedAt,
+                    nowPlaying: fresh.nowPlaying
+                )
+            }
+        }
+
+        return merged.sorted {
+            if $0.nowPlaying != $1.nowPlaying {
+                return $0.nowPlaying && !$1.nowPlaying
+            }
+            let lhs = $0.playedAt ?? .distantPast
+            let rhs = $1.playedAt ?? .distantPast
+            if lhs != rhs {
+                return lhs > rhs
+            }
+            return $0.user.localizedCaseInsensitiveCompare($1.user) == .orderedAscending
+        }
+    }
+
+    private func fetchLatestFriendTrack(user: String) async throws -> (track: String?, artist: String?, imageURL: String?, playedAt: Date?, nowPlaying: Bool)? {
+        var params: [String: String] = [
+            "method": "user.getRecentTracks",
+            "user": user,
+            "limit": "1",
+            "extended": "1"
+        ]
+        let payload = try await send(
+            params: &params,
+            cachePolicy: .ttl(seconds: 15, staleFallbackSeconds: 0)
+        ).payload
+        guard let recent = payload["recenttracks"] as? [String: Any] else {
+            return nil
+        }
+        let tracks = users(from: recent["track"])
+        guard let item = tracks.first else {
+            return nil
+        }
+        let attr = item["@attr"] as? [String: Any]
+        let dateValue = item["date"] as? [String: Any]
+        let uts = firstString(dateValue?["uts"])
+        let playedAt = uts.flatMap(TimeInterval.init).map(Date.init(timeIntervalSince1970:))
+        return (
+            track: firstString(item["name"]),
+            artist: firstString(item["artist"]),
+            imageURL: imageURL(item["image"]),
+            playedAt: playedAt,
+            nowPlaying: boolValue(attr?["nowplaying"])
+        )
     }
 
     func fetchLovedTracksCount() async throws -> Int? {
@@ -673,7 +805,7 @@ final class LastfmAPIClient: LastfmAPI {
     ) async throws -> EndpointResponse {
         let originalParams = params
         let cacheKey = endpointCacheKey(params: originalParams)
-        if let entry = endpointCache[cacheKey], cachePolicy.useFreshCache(for: entry, now: .now) {
+        if let entry = cachedEntry(for: cacheKey), cachePolicy.useFreshCache(for: entry, now: .now) {
             return try EndpointResponse(payload: parsePayload(entry.data), fromCache: true)
         }
 
@@ -698,12 +830,13 @@ final class LastfmAPIClient: LastfmAPI {
             }
 
             if cachePolicy.shouldStore {
-                endpointCache[cacheKey] = EndpointCacheEntry(
+                let entry = EndpointCacheEntry(
                     data: data,
                     cachedAt: .now,
                     expiresAt: Date().addingTimeInterval(cachePolicy.ttlSeconds),
                     staleUntil: Date().addingTimeInterval(cachePolicy.staleFallbackSeconds)
                 )
+                setCachedEntry(entry, for: cacheKey)
             }
             return EndpointResponse(payload: payload, fromCache: false)
         } catch {
@@ -711,7 +844,7 @@ final class LastfmAPIClient: LastfmAPI {
                 throw error
             }
             if cachePolicy.allowStaleFallback,
-               let entry = endpointCache[cacheKey],
+               let entry = cachedEntry(for: cacheKey),
                entry.staleUntil >= Date() {
                 return try EndpointResponse(payload: parsePayload(entry.data), fromCache: true)
             }
@@ -784,6 +917,14 @@ final class LastfmAPIClient: LastfmAPI {
         return nil
     }
 
+    private func boolValue(_ value: Any?) -> Bool {
+        guard let raw = firstString(value)?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(),
+              !raw.isEmpty else {
+            return false
+        }
+        return raw == "1" || raw == "true" || raw == "yes" || raw == "on"
+    }
+
     private func firstInt(_ value: Any?) -> Int? {
         if let int = value as? Int {
             return int
@@ -836,6 +977,18 @@ final class LastfmAPIClient: LastfmAPI {
         allowed.remove(charactersIn: "+&=?")
         return text.addingPercentEncoding(withAllowedCharacters: allowed) ?? text
     }
+
+    private func cachedEntry(for key: String) -> EndpointCacheEntry? {
+        endpointCacheLock.lock()
+        defer { endpointCacheLock.unlock() }
+        return endpointCache[key]
+    }
+
+    private func setCachedEntry(_ entry: EndpointCacheEntry, for key: String) {
+        endpointCacheLock.lock()
+        endpointCache[key] = entry
+        endpointCacheLock.unlock()
+    }
 }
 
 final class LastfmAPIStub: LastfmAPI {
@@ -876,6 +1029,11 @@ final class LastfmAPIStub: LastfmAPI {
     }
 
     func love(track: String, artist: String) async throws {
+        _ = track
+        _ = artist
+    }
+
+    func unlove(track: String, artist: String) async throws {
         _ = track
         _ = artist
     }

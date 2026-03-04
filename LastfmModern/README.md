@@ -38,10 +38,13 @@ xcodebuild \
 - Scrobble progress visualization against threshold.
 - Rich tabs:
   - `Dashboard`: now-playing context, cover art, artist summary, similar artists.
-  - `Scrobbles`: filterable history, row actions (`love`, `tag search`, `open/share`), slide-in detail page.
+  - `Scrobbles`: filterable history, row actions (`love/unlove`, `tag`, `open/share`), slide-in detail page.
   - `Profile`: avatar, subscriber badge, scrobble stats, loved count, top artists (week/overall) with progress bars.
-  - `Friends`: filterable feed, avatars, track artwork, subscriber badges, now-playing emphasis.
+  - `Friends`: filterable feed with hybrid activity mode (now playing + recently active), avatars, track artwork, subscriber badges.
   - `Queue` and `Account`.
+- Adaptive macOS shell behavior:
+  - Responsive toolbar controls for queue/submit/scrobbling toggle.
+  - Split-view sidebar sizing tuned for narrower windows.
 - Detailed metadata integration:
   - `track.getInfo`
   - `artist.getInfo`
@@ -54,5 +57,6 @@ xcodebuild \
 ## Notes and limitations
 
 - Friends "listening now" depends on what Last.fm currently returns for your social graph and privacy settings.
+- Hybrid friends mode includes now-playing users and recently active users (time-window based), so counts can differ from strict live-only views.
 - Some artists/tracks do not provide complete image or metadata; the app falls back gracefully.
 - Keep API credentials out of source control; use environment variables only.

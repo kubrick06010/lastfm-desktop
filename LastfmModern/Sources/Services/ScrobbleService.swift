@@ -59,6 +59,7 @@ final class ScrobbleService: ObservableObject {
     private var progressTask: Task<Void, Never>?
     private var exploreTask: Task<Void, Never>?
     private var profileTask: Task<Void, Never>?
+    private var friendsRefreshTask: Task<Void, Never>?
     private var hasQueuedCurrentTrack = false
     private var hasSentNowPlayingForCurrentTrack = false
     private var recentScrobbles: [String: Date] = [:]
@@ -113,6 +114,7 @@ final class ScrobbleService: ObservableObject {
                 await refreshProfileData()
                 await refreshScrobblesData()
                 await refreshFriendsData()
+                startFriendsAutoRefresh()
             }
         }
 
@@ -128,6 +130,7 @@ final class ScrobbleService: ObservableObject {
         progressTask?.cancel()
         exploreTask?.cancel()
         profileTask?.cancel()
+        friendsRefreshTask?.cancel()
         monitor.stop()
     }
 
@@ -156,6 +159,7 @@ final class ScrobbleService: ObservableObject {
             await refreshProfileData()
             await refreshScrobblesData()
             await refreshFriendsData()
+            startFriendsAutoRefresh()
         } catch {
             handle(error: error)
             authError = lastAPIError
@@ -183,6 +187,8 @@ final class ScrobbleService: ObservableObject {
         isSubscriber = false
         friendsListening = []
         friendsStatus = "Not loaded"
+        friendsRefreshTask?.cancel()
+        friendsRefreshTask = nil
         cancelRetrySchedule()
     }
 
@@ -209,6 +215,21 @@ final class ScrobbleService: ObservableObject {
     }
 
     func inspect(track: String, artist: String) async {
+        let item = LastfmRecentScrobble(
+            id: "\(artist)|\(track)|inspect",
+            track: track,
+            artist: artist,
+            album: nil,
+            imageURL: nil,
+            url: nil,
+            loved: false,
+            playedAt: nil,
+            nowPlaying: false
+        )
+        await inspect(scrobble: item)
+    }
+
+    func inspect(scrobble: LastfmRecentScrobble) async {
         guard isAuthenticated else {
             inspectStatus = "Sign in to inspect tracks"
             inspectedTrackDetails = nil
@@ -218,30 +239,62 @@ final class ScrobbleService: ObservableObject {
         inspectStatus = "Loading detail..."
         lastAPIError = nil
         lastRecoveryHint = nil
+        inspectedTrackDetails = nil
+        inspectedArtistDetails = nil
 
         var loadedAnything = false
+        var degraded = false
 
         do {
-            inspectedTrackDetails = try await api.fetchTrackDetails(artist: artist, track: track)
+            inspectedTrackDetails = try await api.fetchTrackDetails(artist: scrobble.artist, track: scrobble.track)
             loadedAnything = true
         } catch is CancellationError {
             return
         } catch {
-            inspectedTrackDetails = nil
+            inspectedTrackDetails = LastfmTrackDetails(
+                name: scrobble.track,
+                artist: scrobble.artist,
+                album: scrobble.album,
+                imageURL: scrobble.imageURL,
+                listeners: nil,
+                playcount: nil,
+                userPlaycount: nil,
+                url: scrobble.url,
+                summary: "Detailed track metadata is temporarily unavailable.",
+                tags: []
+            )
+            loadedAnything = true
+            degraded = true
             handle(error: error)
         }
 
         do {
-            inspectedArtistDetails = try await api.fetchArtistDetails(artist: artist)
+            inspectedArtistDetails = try await api.fetchArtistDetails(artist: scrobble.artist)
             loadedAnything = true
         } catch is CancellationError {
             return
         } catch {
-            inspectedArtistDetails = nil
+            inspectedArtistDetails = LastfmArtistDetails(
+                name: scrobble.artist,
+                imageURL: nil,
+                listeners: nil,
+                playcount: nil,
+                userPlaycount: nil,
+                url: nil,
+                summary: "Artist biography and stats are temporarily unavailable.",
+                tags: [],
+                similarArtists: []
+            )
+            loadedAnything = true
+            degraded = true
             handle(error: error)
         }
 
-        inspectStatus = loadedAnything ? "Loaded" : "Failed to load detail"
+        if loadedAnything {
+            inspectStatus = degraded ? "Loaded (limited)" : "Loaded"
+        } else {
+            inspectStatus = "Failed to load detail"
+        }
     }
 
     func clearInspection() {
@@ -270,6 +323,36 @@ final class ScrobbleService: ObservableObject {
         } catch {
             handle(error: error)
         }
+    }
+
+    func toggleLove(scrobble: LastfmRecentScrobble) async {
+        do {
+            if scrobble.loved {
+                try await api.unlove(track: scrobble.track, artist: scrobble.artist)
+                updateLovedState(for: scrobble.id, loved: false)
+            } else {
+                try await api.love(track: scrobble.track, artist: scrobble.artist)
+                updateLovedState(for: scrobble.id, loved: true)
+            }
+        } catch {
+            handle(error: error)
+        }
+    }
+
+    private func updateLovedState(for id: String, loved: Bool) {
+        guard let index = latestScrobbles.firstIndex(where: { $0.id == id }) else { return }
+        let item = latestScrobbles[index]
+        latestScrobbles[index] = LastfmRecentScrobble(
+            id: item.id,
+            track: item.track,
+            artist: item.artist,
+            album: item.album,
+            imageURL: item.imageURL,
+            url: item.url,
+            loved: loved,
+            playedAt: item.playedAt,
+            nowPlaying: item.nowPlaying
+        )
     }
 
     func submitQueued() async {
@@ -639,7 +722,7 @@ final class ScrobbleService: ObservableObject {
         lastRecoveryHint = nil
 
         do {
-            friendsListening = try await api.fetchFriendsListening(limit: 200).sorted {
+            friendsListening = try await api.fetchFriendsListening(limit: 1000).sorted {
                 if $0.nowPlaying != $1.nowPlaying {
                     return $0.nowPlaying && !$1.nowPlaying
                 }
@@ -648,7 +731,7 @@ final class ScrobbleService: ObservableObject {
                 return lhs > rhs
             }
             let nowCount = friendsListening.filter(\.nowPlaying).count
-            friendsStatus = "Loaded (\(nowCount) listening now)"
+            friendsStatus = "Loaded \(friendsListening.count) friends (\(nowCount) listening now)"
         } catch is CancellationError {
             return
         } catch {
@@ -673,6 +756,24 @@ final class ScrobbleService: ObservableObject {
                     }
                 }
                 try? await Task.sleep(nanoseconds: 1_000_000_000)
+            }
+        }
+    }
+
+    private func startFriendsAutoRefresh() {
+        friendsRefreshTask?.cancel()
+        guard isAuthenticated else { return }
+        friendsRefreshTask = Task { [weak self] in
+            guard let self else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 60_000_000_000)
+                guard !Task.isCancelled else { return }
+                await MainActor.run {
+                    guard self.isAuthenticated else { return }
+                    Task { @MainActor in
+                        await self.refreshFriendsData()
+                    }
+                }
             }
         }
     }

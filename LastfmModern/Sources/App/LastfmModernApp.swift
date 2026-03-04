@@ -8,8 +8,9 @@ struct LastfmModernApp: App {
         WindowGroup("LastfmModern") {
             ContentView()
                 .environmentObject(scrobbleService)
-                .frame(minWidth: 980, minHeight: 620)
+                .frame(minWidth: 760, minHeight: 560)
         }
+        .defaultSize(width: 1180, height: 760)
         .commands {
             CommandGroup(after: .appInfo) {
                 Button("Queue Current Track") {

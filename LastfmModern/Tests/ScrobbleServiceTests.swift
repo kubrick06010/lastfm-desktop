@@ -224,6 +224,11 @@ private final class MockAPI: LastfmAPI {
         _ = artist
     }
 
+    func unlove(track: String, artist: String) async throws {
+        _ = track
+        _ = artist
+    }
+
     func fetchTrackDetails(artist: String, track: String) async throws -> LastfmTrackDetails {
         LastfmTrackDetails(
             name: track,
