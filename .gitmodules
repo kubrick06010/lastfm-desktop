@@ -1,0 +1,3 @@
+[submodule "liblastfm"]
+	path = liblastfm
+	url = https://github.com/lastfm/liblastfm.git

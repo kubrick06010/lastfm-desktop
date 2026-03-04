@@ -1,0 +1,477 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 54;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		02745FBE08A29F5A96E4E17D /* PlayerNormalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72612633A568EC16C6689426 /* PlayerNormalization.swift */; };
+		0AE7C3C7DB8F83D3F0F2FD4C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 084ACD419AA7A9C9A4D53A6E /* ContentView.swift */; };
+		1079E9D9FF8F87625FECC2E6 /* PlayerNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83578846E1C13C196BCE5C13 /* PlayerNormalizationTests.swift */; };
+		2FA00C7A6AA3295659CA91A7 /* ScrobbleServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07EFD20E620A0A65AB20ABB /* ScrobbleServiceTests.swift */; };
+		34C747A2FA04664611A2F282 /* LastfmSessionStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972F10C6AB1D594AF9733157 /* LastfmSessionStore.swift */; };
+		85C51EBC631F286770D3E38A /* ScrobbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770A8738C831B64EDC9F712E /* ScrobbleService.swift */; };
+		868719F5D9B4B680C31C4770 /* PlayerMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */; };
+		B378919371396C01B332FD7E /* LastfmAPIErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F39BAA8098761BB8D27B1E /* LastfmAPIErrorTests.swift */; };
+		BF2734264320C21B1E11BDA8 /* LastfmAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D4EAA843A3ED01728DA93D /* LastfmAPI.swift */; };
+		C74EFBD1B57C39E53FFF120F /* LastfmModernApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7865CB60DD9C802C8E94E92 /* LastfmModernApp.swift */; };
+		E89F4220EBD07EB6A4E571F3 /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F146F28683F5214FDD43C2 /* NowPlayingView.swift */; };
+		F185FFBF38B2CDC185F55745 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCE2B2CE001BD6762C752741 /* SettingsView.swift */; };
+		F964CBF582DE6064EFED8AA4 /* LastfmSignatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D0366E9732BBF7659218C63 /* LastfmSignatureTests.swift */; };
+		FA2489A06875F4B91327A193 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2CAD7EEE66A29949B944A4 /* Track.swift */; };
+		FD67A808AA089C42E501248E /* ScrobbleQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7C746DA58DD1528F775CB1 /* ScrobbleQueueStore.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		EF9E920563DC8806B4729003 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = AFAEE051AFD47D0B94D4EB57 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A464A5DECD7003A701F33968;
+			remoteInfo = LastfmModern;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		084ACD419AA7A9C9A4D53A6E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		0F7C746DA58DD1528F775CB1 /* ScrobbleQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleQueueStore.swift; sourceTree = "<group>"; };
+		2F2CAD7EEE66A29949B944A4 /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
+		5D0366E9732BBF7659218C63 /* LastfmSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmSignatureTests.swift; sourceTree = "<group>"; };
+		6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerMonitor.swift; sourceTree = "<group>"; };
+		72612633A568EC16C6689426 /* PlayerNormalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerNormalization.swift; sourceTree = "<group>"; };
+		770A8738C831B64EDC9F712E /* ScrobbleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleService.swift; sourceTree = "<group>"; };
+		83578846E1C13C196BCE5C13 /* PlayerNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerNormalizationTests.swift; sourceTree = "<group>"; };
+		93CA46DD334779024B29A170 /* LastfmModern.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LastfmModern.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		972F10C6AB1D594AF9733157 /* LastfmSessionStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmSessionStore.swift; sourceTree = "<group>"; };
+		98F39BAA8098761BB8D27B1E /* LastfmAPIErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPIErrorTests.swift; sourceTree = "<group>"; };
+		A7D4EAA843A3ED01728DA93D /* LastfmAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPI.swift; sourceTree = "<group>"; };
+		B5F146F28683F5214FDD43C2 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
+		BF02D4D4561BB6F4204B54F2 /* LastfmModernTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LastfmModernTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C7865CB60DD9C802C8E94E92 /* LastfmModernApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmModernApp.swift; sourceTree = "<group>"; };
+		CCE2B2CE001BD6762C752741 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		F07EFD20E620A0A65AB20ABB /* ScrobbleServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleServiceTests.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		4B0E6D08689AD864D31A5EB4 /* Domain */ = {
+			isa = PBXGroup;
+			children = (
+				2F2CAD7EEE66A29949B944A4 /* Track.swift */,
+			);
+			path = Domain;
+			sourceTree = "<group>";
+		};
+		651FCB615CBFCAC714AC1B4F /* App */ = {
+			isa = PBXGroup;
+			children = (
+				C7865CB60DD9C802C8E94E92 /* LastfmModernApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		90618AFC8E3FCBC12B3A0C52 /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				651FCB615CBFCAC714AC1B4F /* App */,
+				4B0E6D08689AD864D31A5EB4 /* Domain */,
+				931876567F55CE7C9B55F199 /* Services */,
+				B2B4C3FE0BC3B9F27EC62EBE /* UI */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		931876567F55CE7C9B55F199 /* Services */ = {
+			isa = PBXGroup;
+			children = (
+				A7D4EAA843A3ED01728DA93D /* LastfmAPI.swift */,
+				972F10C6AB1D594AF9733157 /* LastfmSessionStore.swift */,
+				6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */,
+				72612633A568EC16C6689426 /* PlayerNormalization.swift */,
+				0F7C746DA58DD1528F775CB1 /* ScrobbleQueueStore.swift */,
+				770A8738C831B64EDC9F712E /* ScrobbleService.swift */,
+			);
+			path = Services;
+			sourceTree = "<group>";
+		};
+		997F3B0D5DCD7B9D36BD9ACA = {
+			isa = PBXGroup;
+			children = (
+				90618AFC8E3FCBC12B3A0C52 /* Sources */,
+				B5ECFD592896B9A2AF45DFF3 /* Tests */,
+				E15FF985D1E1E9BA316E899D /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		B2B4C3FE0BC3B9F27EC62EBE /* UI */ = {
+			isa = PBXGroup;
+			children = (
+				084ACD419AA7A9C9A4D53A6E /* ContentView.swift */,
+				B5F146F28683F5214FDD43C2 /* NowPlayingView.swift */,
+				CCE2B2CE001BD6762C752741 /* SettingsView.swift */,
+			);
+			path = UI;
+			sourceTree = "<group>";
+		};
+		B5ECFD592896B9A2AF45DFF3 /* Tests */ = {
+			isa = PBXGroup;
+			children = (
+				98F39BAA8098761BB8D27B1E /* LastfmAPIErrorTests.swift */,
+				5D0366E9732BBF7659218C63 /* LastfmSignatureTests.swift */,
+				83578846E1C13C196BCE5C13 /* PlayerNormalizationTests.swift */,
+				F07EFD20E620A0A65AB20ABB /* ScrobbleServiceTests.swift */,
+			);
+			path = Tests;
+			sourceTree = "<group>";
+		};
+		E15FF985D1E1E9BA316E899D /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				93CA46DD334779024B29A170 /* LastfmModern.app */,
+				BF02D4D4561BB6F4204B54F2 /* LastfmModernTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		964E892C1A913809C3D829AB /* LastfmModernTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 40EA86ACE9FE557EC9AE6F62 /* Build configuration list for PBXNativeTarget "LastfmModernTests" */;
+			buildPhases = (
+				9DE71E9E494ABF593B78C651 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A36C343B7BC89AA68AEC8972 /* PBXTargetDependency */,
+			);
+			name = LastfmModernTests;
+			packageProductDependencies = (
+			);
+			productName = LastfmModernTests;
+			productReference = BF02D4D4561BB6F4204B54F2 /* LastfmModernTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A464A5DECD7003A701F33968 /* LastfmModern */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 2261A94260383A56A547AD26 /* Build configuration list for PBXNativeTarget "LastfmModern" */;
+			buildPhases = (
+				65710E5A6A3ED6F64CE566BE /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = LastfmModern;
+			packageProductDependencies = (
+			);
+			productName = LastfmModern;
+			productReference = 93CA46DD334779024B29A170 /* LastfmModern.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		AFAEE051AFD47D0B94D4EB57 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+				};
+			};
+			buildConfigurationList = B5DD8A06A0D7B5EA6DAAB0ED /* Build configuration list for PBXProject "LastfmModern" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = 997F3B0D5DCD7B9D36BD9ACA;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 54;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A464A5DECD7003A701F33968 /* LastfmModern */,
+				964E892C1A913809C3D829AB /* LastfmModernTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		65710E5A6A3ED6F64CE566BE /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0AE7C3C7DB8F83D3F0F2FD4C /* ContentView.swift in Sources */,
+				BF2734264320C21B1E11BDA8 /* LastfmAPI.swift in Sources */,
+				C74EFBD1B57C39E53FFF120F /* LastfmModernApp.swift in Sources */,
+				34C747A2FA04664611A2F282 /* LastfmSessionStore.swift in Sources */,
+				E89F4220EBD07EB6A4E571F3 /* NowPlayingView.swift in Sources */,
+				868719F5D9B4B680C31C4770 /* PlayerMonitor.swift in Sources */,
+				02745FBE08A29F5A96E4E17D /* PlayerNormalization.swift in Sources */,
+				FD67A808AA089C42E501248E /* ScrobbleQueueStore.swift in Sources */,
+				85C51EBC631F286770D3E38A /* ScrobbleService.swift in Sources */,
+				F185FFBF38B2CDC185F55745 /* SettingsView.swift in Sources */,
+				FA2489A06875F4B91327A193 /* Track.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9DE71E9E494ABF593B78C651 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				B378919371396C01B332FD7E /* LastfmAPIErrorTests.swift in Sources */,
+				F964CBF582DE6064EFED8AA4 /* LastfmSignatureTests.swift in Sources */,
+				1079E9D9FF8F87625FECC2E6 /* PlayerNormalizationTests.swift in Sources */,
+				2FA00C7A6AA3295659CA91A7 /* ScrobbleServiceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A36C343B7BC89AA68AEC8972 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A464A5DECD7003A701F33968 /* LastfmModern */;
+			targetProxy = EF9E920563DC8806B4729003 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		0B7FF841B71D6C11CB1E205D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fm.last.scrobbler.modern.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LastfmModern.app/Contents/MacOS/LastfmModern";
+			};
+			name = Debug;
+		};
+		162FA9C8259669D04E99EC43 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = LastfmModern;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright (c) 2026";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_NAME = LastfmModern;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		2C9676FA5E5215DD5EE0B508 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				COMBINE_HIDPI_IMAGES = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = LastfmModern;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright (c) 2026";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_NAME = LastfmModern;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		652B7549C2B38EA2794D76AD /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = fm.last.scrobbler.modern;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Debug;
+		};
+		DD372A75DBA668679EF4A8C1 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				COMBINE_HIDPI_IMAGES = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/../Frameworks",
+					"@loader_path/../Frameworks",
+				);
+				MACOSX_DEPLOYMENT_TARGET = 13.0;
+				PRODUCT_BUNDLE_IDENTIFIER = fm.last.scrobbler.modern.tests;
+				SDKROOT = macosx;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/LastfmModern.app/Contents/MacOS/LastfmModern";
+			};
+			name = Release;
+		};
+		E64711B247E1A5904CB4DB66 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_BUNDLE_IDENTIFIER = fm.last.scrobbler.modern;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = macosx;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 5.0;
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		2261A94260383A56A547AD26 /* Build configuration list for PBXNativeTarget "LastfmModern" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				2C9676FA5E5215DD5EE0B508 /* Debug */,
+				162FA9C8259669D04E99EC43 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		40EA86ACE9FE557EC9AE6F62 /* Build configuration list for PBXNativeTarget "LastfmModernTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				0B7FF841B71D6C11CB1E205D /* Debug */,
+				DD372A75DBA668679EF4A8C1 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		B5DD8A06A0D7B5EA6DAAB0ED /* Build configuration list for PBXProject "LastfmModern" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				652B7549C2B38EA2794D76AD /* Debug */,
+				E64711B247E1A5904CB4DB66 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = AFAEE051AFD47D0B94D4EB57 /* Project object */;
+}

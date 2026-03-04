@@ -19,3 +19,6 @@ admin/dist/mac/dsa_priv.pem
 *.vscode
 Growl
 Sparkle
+*.profraw
+*.xcuserstate
+xcuserdata/
