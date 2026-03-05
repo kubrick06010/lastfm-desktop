@@ -562,10 +562,15 @@ final class LastfmAPIClient: LastfmAPI {
         let user = try requireSessionName()
         let cappedLimit = min(max(1, limit), 1000)
         let pageSize = min(50, cappedLimit)
-        let maxPages = Int(ceil(Double(cappedLimit) / Double(pageSize)))
         var collected: [LastfmFriendListening] = []
+        var page = 1
+        var totalPages: Int?
+        let requestedMaxPages = Int(ceil(Double(cappedLimit) / Double(pageSize)))
 
-        for page in 1...maxPages {
+        while page <= requestedMaxPages {
+            if let totalPages, page > totalPages {
+                break
+            }
             var params: [String: String] = [
                 "method": "user.getFriends",
                 "user": user,
@@ -574,12 +579,28 @@ final class LastfmAPIClient: LastfmAPI {
                 "page": String(page)
             ]
 
-            let payload = try await send(
-                params: &params,
-                cachePolicy: .ttl(seconds: 20, staleFallbackSeconds: 0)
-            ).payload
+            let payload: [String: Any]
+            do {
+                payload = try await send(
+                    params: &params,
+                    cachePolicy: .ttl(seconds: 20, staleFallbackSeconds: 0)
+                ).payload
+            } catch let LastfmAPIError.api(code, _) where code == 6 {
+                // "no such page" can happen when requested pages exceed totalPages.
+                if page > 1 {
+                    break
+                }
+                throw LastfmAPIError.api(code: code, message: "no such page")
+            }
+
             guard let friendsData = payload["friends"] as? [String: Any] else {
                 throw LastfmAPIError.invalidResponse
+            }
+            if totalPages == nil,
+               let attr = friendsData["@attr"] as? [String: Any],
+               let parsed = firstInt(attr["totalPages"]),
+               parsed > 0 {
+                totalPages = parsed
             }
 
             let usersArray = users(from: friendsData["user"])
@@ -620,6 +641,7 @@ final class LastfmAPIClient: LastfmAPI {
             if collected.count >= cappedLimit {
                 break
             }
+            page += 1
         }
         var deduped: [String: LastfmFriendListening] = [:]
         for friend in collected {
@@ -1018,15 +1040,40 @@ final class LastfmAPIClient: LastfmAPI {
     }
 
     private func imageURL(_ value: Any?) -> String? {
+        if let text = firstString(value), !text.isEmpty, text != "true", text != "false" {
+            return normalizedImageCandidate(text)
+        }
+        if let dict = value as? [String: Any] {
+            if let text = firstString(dict["#text"]), !text.isEmpty {
+                return normalizedImageCandidate(text)
+            }
+            let preferred = ["extralarge", "large", "medium", "small"]
+            for size in preferred {
+                if let candidate = normalizedImageCandidate(firstString(dict[size])), !candidate.isEmpty {
+                    return candidate
+                }
+            }
+        }
         guard let images = value as? [[String: Any]] else { return nil }
         let preferred = ["extralarge", "large", "medium", "small"]
         for size in preferred {
             if let match = images.first(where: { firstString($0["size"]) == size }),
-               let text = firstString(match["#text"]) {
+               let text = normalizedImageCandidate(firstString(match["#text"])) {
                 return text
             }
         }
-        return images.compactMap { firstString($0["#text"]) }.first
+        return images.compactMap { normalizedImageCandidate(firstString($0["#text"])) }.first
+    }
+
+    private func normalizedImageCandidate(_ raw: String?) -> String? {
+        guard let raw else { return nil }
+        let trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        // Last.fm's common generic placeholder avatar/artwork.
+        if trimmed.contains("2a96cbd8b46e442fc41c2b86b821562f") {
+            return nil
+        }
+        return trimmed
     }
 
     private func endpointCacheKey(params: [String: String]) -> String {
