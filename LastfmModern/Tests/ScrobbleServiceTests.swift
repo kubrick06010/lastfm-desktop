@@ -309,6 +309,11 @@ private final class MockAPI: LastfmAPI {
         return [LastfmTopArtist(id: "artist", name: "Artist", playcount: 10, imageURL: nil, url: nil)]
     }
 
+    func fetchGlobalTopArtists(limit: Int) async throws -> [String] {
+        _ = limit
+        return ["Artist", "Another Artist"]
+    }
+
     func fetchLovedTracksCount() async throws -> Int? {
         0
     }

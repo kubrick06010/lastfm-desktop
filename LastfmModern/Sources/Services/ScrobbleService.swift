@@ -37,7 +37,10 @@ final class ScrobbleService: ObservableObject {
     @Published private(set) var latestScrobbles: [LastfmRecentScrobble] = []
     @Published private(set) var friendsListening: [LastfmFriendListening] = []
     @Published private(set) var weeklyTopArtists: [LastfmTopArtist] = []
+    @Published private(set) var monthlyTopArtists: [LastfmTopArtist] = []
+    @Published private(set) var yearlyTopArtists: [LastfmTopArtist] = []
     @Published private(set) var overallTopArtists: [LastfmTopArtist] = []
+    @Published private(set) var globalTopArtistNames: [String] = []
     @Published private(set) var lovedTracksCount: Int?
     @Published private(set) var tracksPerDayAverage: Int?
     @Published private(set) var isSubscriber = false
@@ -63,6 +66,7 @@ final class ScrobbleService: ObservableObject {
     private var hasQueuedCurrentTrack = false
     private var hasSentNowPlayingForCurrentTrack = false
     private var recentScrobbles: [String: Date] = [:]
+    private let inferredNowPlayingWindow: TimeInterval = 30 * 60
     private let retryJitter: () -> Double
     private let sleepFunction: @Sendable (UInt64) async -> Void
 
@@ -170,6 +174,7 @@ final class ScrobbleService: ObservableObject {
         api.clearSession()
         sessionStore.clear()
         isAuthenticated = false
+        authError = nil
         sessionStatus = "Not authenticated"
         capabilitiesStatus = "Unknown"
         validationSource = "Live"
@@ -179,7 +184,10 @@ final class ScrobbleService: ObservableObject {
         inspectStatus = "Select a scrobble to inspect"
         latestScrobbles = []
         weeklyTopArtists = []
+        monthlyTopArtists = []
+        yearlyTopArtists = []
         overallTopArtists = []
+        globalTopArtistNames = []
         lovedTracksCount = nil
         tracksPerDayAverage = nil
         profileStatus = "Not loaded"
@@ -657,7 +665,10 @@ final class ScrobbleService: ObservableObject {
             profileStatus = "Sign in to load profile"
             profile = nil
             weeklyTopArtists = []
+            monthlyTopArtists = []
+            yearlyTopArtists = []
             overallTopArtists = []
+            globalTopArtistNames = []
             lovedTracksCount = nil
             tracksPerDayAverage = nil
             return
@@ -670,15 +681,23 @@ final class ScrobbleService: ObservableObject {
         profileTask = Task { @MainActor in
             do {
                 let profile = try await api.fetchUserProfile()
-                async let weekly = api.fetchTopArtists(period: .week, limit: 6)
-                async let overall = api.fetchTopArtists(period: .overall, limit: 8)
+                async let weekly = api.fetchTopArtists(period: .week, limit: 30)
+                async let month = api.fetchTopArtists(period: .month, limit: 40)
+                async let year = api.fetchTopArtists(period: .year, limit: 40)
+                async let overall = api.fetchTopArtists(period: .overall, limit: 40)
                 async let lovedCount = api.fetchLovedTracksCount()
+                async let global = api.fetchGlobalTopArtists(limit: 1000)
                 self.profile = profile
                 let weeklyBase = try await weekly
+                let monthlyBase = try await month
+                let yearlyBase = try await year
                 let overallBase = try await overall
                 self.weeklyTopArtists = await self.hydrateTopArtistImages(weeklyBase)
+                self.monthlyTopArtists = await self.hydrateTopArtistImages(monthlyBase)
+                self.yearlyTopArtists = await self.hydrateTopArtistImages(yearlyBase)
                 self.overallTopArtists = await self.hydrateTopArtistImages(overallBase)
                 self.lovedTracksCount = try await lovedCount
+                self.globalTopArtistNames = (try? await global) ?? []
                 self.tracksPerDayAverage = self.computeTracksPerDayAverage(profile)
                 self.profileStatus = "Loaded"
             } catch is CancellationError {
@@ -722,7 +741,23 @@ final class ScrobbleService: ObservableObject {
         lastRecoveryHint = nil
 
         do {
-            friendsListening = try await api.fetchFriendsListening(limit: 1000).sorted {
+            friendsListening = try await api.fetchFriendsListening(limit: 1000).map { friend in
+                let inferredNowPlaying = inferredNowPlayingState(for: friend)
+                guard inferredNowPlaying != friend.nowPlaying else { return friend }
+                return LastfmFriendListening(
+                    id: friend.id,
+                    user: friend.user,
+                    realname: friend.realname,
+                    country: friend.country,
+                    isSubscriber: friend.isSubscriber,
+                    avatarURL: friend.avatarURL,
+                    track: friend.track,
+                    artist: friend.artist,
+                    imageURL: friend.imageURL,
+                    playedAt: friend.playedAt,
+                    nowPlaying: inferredNowPlaying
+                )
+            }.sorted {
                 if $0.nowPlaying != $1.nowPlaying {
                     return $0.nowPlaying && !$1.nowPlaying
                 }
@@ -730,7 +765,7 @@ final class ScrobbleService: ObservableObject {
                 let rhs = $1.playedAt ?? .distantPast
                 return lhs > rhs
             }
-            let nowCount = friendsListening.filter(\.nowPlaying).count
+            let nowCount = friendsListening.filter { inferredNowPlayingState(for: $0) }.count
             friendsStatus = "Loaded \(friendsListening.count) friends (\(nowCount) listening now)"
         } catch is CancellationError {
             return
@@ -738,6 +773,19 @@ final class ScrobbleService: ObservableObject {
             handle(error: error)
             friendsStatus = "Failed to load friends"
         }
+    }
+
+    private func isLikelyNowPlaying(playedAt: Date?) -> Bool {
+        guard let playedAt else { return false }
+        let age = Date().timeIntervalSince(playedAt)
+        return age >= 0 && age <= inferredNowPlayingWindow
+    }
+
+    private func inferredNowPlayingState(for friend: LastfmFriendListening) -> Bool {
+        if friend.nowPlaying {
+            return true
+        }
+        return isLikelyNowPlaying(playedAt: friend.playedAt)
     }
 
     private func startProgressUpdates() {
@@ -839,8 +887,8 @@ final class ScrobbleService: ObservableObject {
     private func hydrateTopArtistImages(_ artists: [LastfmTopArtist]) async -> [LastfmTopArtist] {
         var hydrated: [LastfmTopArtist] = []
         hydrated.reserveCapacity(artists.count)
-        for artist in artists {
-            if artist.imageURL != nil {
+        for (index, artist) in artists.enumerated() {
+            if artist.imageURL != nil || index >= 12 {
                 hydrated.append(artist)
                 continue
             }

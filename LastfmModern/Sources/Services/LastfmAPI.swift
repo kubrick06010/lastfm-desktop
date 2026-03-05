@@ -31,6 +31,7 @@ protocol LastfmAPI {
     func fetchRecentScrobbles(limit: Int) async throws -> [LastfmRecentScrobble]
     func fetchFriendsListening(limit: Int) async throws -> [LastfmFriendListening]
     func fetchTopArtists(period: LastfmTopArtistPeriod, limit: Int) async throws -> [LastfmTopArtist]
+    func fetchGlobalTopArtists(limit: Int) async throws -> [String]
     func fetchLovedTracksCount() async throws -> Int?
 }
 
@@ -44,10 +45,27 @@ struct LastfmAPIConfig {
     let sharedSecret: String
     let endpoint: URL
 
-    static func fromEnvironment(bundle: Bundle = .main) -> LastfmAPIConfig? {
+    // Legacy desktop defaults from `lib/unicorn/UnicornCoreApplication.cpp`.
+    private static let legacyDefaultAPIKey = "9e89b44de1ff37c5246ad0af18406454"
+    private static let legacyDefaultSharedSecret = "147320ea9b8930fe196a4231da50ada4"
+
+    static let userDefaultsAPIKey = "lastfm.apiKey"
+    static let userDefaultsSharedSecret = "lastfm.sharedSecret"
+
+    static func fromEnvironment(bundle: Bundle = .main, defaults: UserDefaults = .standard) -> LastfmAPIConfig? {
         let env = ProcessInfo.processInfo.environment
-        let key = env["LASTFM_API_KEY"] ?? bundle.object(forInfoDictionaryKey: "LASTFM_API_KEY") as? String
-        let secret = env["LASTFM_SHARED_SECRET"] ?? bundle.object(forInfoDictionaryKey: "LASTFM_SHARED_SECRET") as? String
+        let key = normalized(
+            env["LASTFM_API_KEY"] ??
+            bundle.object(forInfoDictionaryKey: "LASTFM_API_KEY") as? String ??
+            defaults.string(forKey: userDefaultsAPIKey) ??
+            legacyDefaultAPIKey
+        )
+        let secret = normalized(
+            env["LASTFM_SHARED_SECRET"] ??
+            bundle.object(forInfoDictionaryKey: "LASTFM_SHARED_SECRET") as? String ??
+            defaults.string(forKey: userDefaultsSharedSecret) ??
+            legacyDefaultSharedSecret
+        )
 
         guard let key, !key.isEmpty, let secret, !secret.isEmpty else {
             return nil
@@ -58,6 +76,20 @@ struct LastfmAPIConfig {
             sharedSecret: secret,
             endpoint: URL(string: "https://ws.audioscrobbler.com/2.0/")!
         )
+    }
+
+    static func saveToDefaults(apiKey: String, sharedSecret: String, defaults: UserDefaults = .standard) {
+        defaults.set(apiKey, forKey: userDefaultsAPIKey)
+        defaults.set(sharedSecret, forKey: userDefaultsSharedSecret)
+    }
+
+    static func clearSavedCredentials(defaults: UserDefaults = .standard) {
+        defaults.removeObject(forKey: userDefaultsAPIKey)
+        defaults.removeObject(forKey: userDefaultsSharedSecret)
+    }
+
+    private static func normalized(_ value: String?) -> String? {
+        value?.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }
 
@@ -156,6 +188,8 @@ struct LastfmFriendListening: Equatable, Identifiable {
 enum LastfmTopArtistPeriod: String {
     case overall
     case week = "7day"
+    case month = "1month"
+    case year = "12month"
 }
 
 struct LastfmTopArtist: Equatable, Identifiable {
@@ -564,9 +598,9 @@ final class LastfmAPIClient: LastfmAPI {
                 let artist = firstString(recentTrack?["artist"])
                 let imageURL = imageURL(recentTrack?["image"])
                 let attr = recentTrack?["@attr"] as? [String: Any]
-                let nowPlaying = boolValue(attr?["nowplaying"])
                 let date = recentTrack?["date"] as? [String: Any]
                 let playedAt = firstString(date?["uts"]).flatMap(TimeInterval.init).map(Date.init(timeIntervalSince1970:))
+                let nowPlaying = boolValue(attr?["nowplaying"]) || (recentTrack != nil && playedAt == nil)
 
                 return LastfmFriendListening(
                     id: name,
@@ -623,7 +657,7 @@ final class LastfmAPIClient: LastfmAPI {
         let candidates = merged
             .filter { !$0.nowPlaying }
             .sorted { ($0.playedAt ?? .distantPast) > ($1.playedAt ?? .distantPast) }
-        let hydrationCap = min(cappedLimit, candidates.count)
+        let hydrationCap = min(120, candidates.count)
         let hydrationBatchSize = 25
         if hydrationCap > 0 {
             var freshByUser: [String: (track: String?, artist: String?, imageURL: String?, playedAt: Date?, nowPlaying: Bool)] = [:]
@@ -706,7 +740,7 @@ final class LastfmAPIClient: LastfmAPI {
             artist: firstString(item["artist"]),
             imageURL: imageURL(item["image"]),
             playedAt: playedAt,
-            nowPlaying: boolValue(attr?["nowplaying"])
+            nowPlaying: boolValue(attr?["nowplaying"]) || (playedAt == nil && firstString(item["name"]) != nil)
         )
     }
 
@@ -754,6 +788,49 @@ final class LastfmAPIClient: LastfmAPI {
                 url: firstString(artist["url"])
             )
         }
+    }
+
+    func fetchGlobalTopArtists(limit: Int = 50) async throws -> [String] {
+        let cappedLimit = min(max(1, limit), 1000)
+        let perPage = min(200, cappedLimit)
+        let pages = Int(ceil(Double(cappedLimit) / Double(perPage)))
+
+        var names: [String] = []
+        var seen = Set<String>()
+        for page in 1...max(1, pages) {
+            var params: [String: String] = [
+                "method": "chart.getTopArtists",
+                "limit": String(perPage),
+                "page": String(page)
+            ]
+
+            let payload = try await send(
+                params: &params,
+                cachePolicy: .ttl(seconds: 3600, staleFallbackSeconds: 86_400)
+            ).payload
+            guard let artistsContainer = payload["artists"] as? [String: Any] else {
+                throw LastfmAPIError.invalidResponse
+            }
+
+            let batch = users(from: artistsContainer["artist"]).compactMap {
+                firstString($0["name"])
+            }
+            if batch.isEmpty {
+                break
+            }
+
+            for name in batch where names.count < cappedLimit {
+                let key = name.lowercased()
+                if seen.insert(key).inserted {
+                    names.append(name)
+                }
+            }
+
+            if names.count >= cappedLimit {
+                break
+            }
+        }
+        return names
     }
 
     private func recentTrackObject(_ value: Any?) -> [String: Any]? {
@@ -1123,11 +1200,32 @@ final class LastfmAPIStub: LastfmAPI {
         return (0..<count).map { index in
             LastfmTopArtist(
                 id: "\(period.rawValue)-stub-\(index)",
-                name: "\(period == .week ? "Weekly" : "Overall") Artist \(index + 1)",
+                name: "\(periodLabel(period)) Artist \(index + 1)",
                 playcount: 100 - index * 7,
                 imageURL: nil,
                 url: nil
             )
+        }
+    }
+
+    func fetchGlobalTopArtists(limit: Int) async throws -> [String] {
+        let seed = [
+            "Taylor Swift", "Drake", "The Weeknd", "Bad Bunny", "Billie Eilish",
+            "Coldplay", "Kendrick Lamar", "Ariana Grande", "Radiohead", "Pink Floyd"
+        ]
+        return Array(seed.prefix(max(1, min(limit, seed.count))))
+    }
+
+    private func periodLabel(_ period: LastfmTopArtistPeriod) -> String {
+        switch period {
+        case .week:
+            return "Weekly"
+        case .month:
+            return "Monthly"
+        case .year:
+            return "Yearly"
+        case .overall:
+            return "Overall"
         }
     }
 

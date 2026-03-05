@@ -48,7 +48,15 @@ end
 
 def build
 	## build everything
-	Dir.chdir("../liblastfm") do
+	liblastfm_path = if Dir.exist?("liblastfm")
+		"liblastfm"
+	elsif Dir.exist?("../liblastfm")
+		"../liblastfm"
+	else
+		raise "liblastfm not found. Expected ./liblastfm or ../liblastfm"
+	end
+
+	Dir.chdir(liblastfm_path) do
 		system "rm -rf _release"
 		Dir.mkdir("_release")
 		Dir.chdir("_release") do
@@ -183,4 +191,3 @@ if not ARGV.include?( "--no-package" )
 	upload_files
 	generate_appcast_xml
 end
-

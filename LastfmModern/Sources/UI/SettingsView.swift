@@ -6,7 +6,7 @@ struct SettingsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             Text("Preferences")
-                .font(.custom("Avenir Next Heavy", size: 24))
+                .font(.custom("Avenir Next Demi Bold", size: 24))
 
             GroupBox("Scrobbling") {
                 VStack(alignment: .leading, spacing: 10) {

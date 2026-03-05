@@ -5,18 +5,19 @@ Modern macOS Last.fm desktop client built with SwiftUI.
 ## Requirements
 
 - macOS with Xcode installed.
-- Last.fm API credentials (API key + shared secret) for live mode.
 
 ## Configuration
 
-Set credentials in your shell before launching from Xcode:
+For end users, API credentials are handled internally (legacy desktop compatibility), so only Last.fm username/password are needed to sign in.
+
+For development/testing, you can still override credentials via environment variables:
 
 ```bash
 export LASTFM_API_KEY="your_api_key"
 export LASTFM_SHARED_SECRET="your_shared_secret"
 ```
 
-If these are missing, the app starts in stub mode with mock data.
+These overrides are optional.
 
 ## Build and test
 
@@ -45,6 +46,7 @@ xcodebuild \
 - Adaptive macOS shell behavior:
   - Responsive toolbar controls for queue/submit/scrobbling toggle.
   - Split-view sidebar sizing tuned for narrower windows.
+  - Diagnostics moved to a dedicated window available from `Tools -> Diagnostics` and the menu bar extra.
 - Detailed metadata integration:
   - `track.getInfo`
   - `artist.getInfo`
@@ -59,4 +61,4 @@ xcodebuild \
 - Friends "listening now" depends on what Last.fm currently returns for your social graph and privacy settings.
 - Hybrid friends mode includes now-playing users and recently active users (time-window based), so counts can differ from strict live-only views.
 - Some artists/tracks do not provide complete image or metadata; the app falls back gracefully.
-- Keep API credentials out of source control; use environment variables only.
+- Keep API credentials out of source control when using override values.

@@ -8,7 +8,7 @@ struct NowPlayingView: View {
         VStack(alignment: .leading, spacing: compact ? 8 : 10) {
             HStack {
                 Text("Now Playing")
-                    .font(.custom("Avenir Next Heavy", size: compact ? 16 : 24))
+                    .font(.custom("Avenir Next Medium", size: compact ? 16 : 24))
                 Spacer()
                 StatusChip(
                     title: scrobbleService.playbackState,
@@ -18,7 +18,7 @@ struct NowPlayingView: View {
 
             if let track = scrobbleService.currentTrack {
                 Text(track.title)
-                    .font(.custom("Avenir Next Heavy", size: compact ? 15 : 20))
+                    .font(.custom("Avenir Next Medium", size: compact ? 15 : 20))
                 Text(track.artist)
                     .font(.custom("Avenir Next Medium", size: compact ? 12 : 14))
                     .foregroundStyle(.secondary)
@@ -29,7 +29,7 @@ struct NowPlayingView: View {
                 }
                 if let sourceApp = track.sourceApp {
                     Text(sourceApp.uppercased())
-                        .font(.custom("Avenir Next Demi Bold", size: 11))
+                        .font(.custom("Avenir Next Medium", size: 11))
                         .foregroundStyle(.orange)
                 }
                 VStack(alignment: .leading, spacing: 4) {
@@ -66,7 +66,7 @@ private struct StatusChip: View {
 
     var body: some View {
         Text(title)
-            .font(.custom("Avenir Next Demi Bold", size: 11))
+            .font(.custom("Avenir Next Medium", size: 11))
             .padding(.horizontal, 8)
             .padding(.vertical, 4)
             .foregroundStyle(color)
