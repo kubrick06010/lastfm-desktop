@@ -21,6 +21,7 @@
 		F185FFBF38B2CDC185F55745 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCE2B2CE001BD6762C752741 /* SettingsView.swift */; };
 		F964CBF582DE6064EFED8AA4 /* LastfmSignatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D0366E9732BBF7659218C63 /* LastfmSignatureTests.swift */; };
 		FA2489A06875F4B91327A193 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2CAD7EEE66A29949B944A4 /* Track.swift */; };
+		FA59949C2971354EDE40DDE6 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 2E67118C04C7E83F141A2226 /* Assets.xcassets */; };
 		FD67A808AA089C42E501248E /* ScrobbleQueueStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0F7C746DA58DD1528F775CB1 /* ScrobbleQueueStore.swift */; };
 /* End PBXBuildFile section */
 
@@ -37,6 +38,7 @@
 /* Begin PBXFileReference section */
 		084ACD419AA7A9C9A4D53A6E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
 		0F7C746DA58DD1528F775CB1 /* ScrobbleQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleQueueStore.swift; sourceTree = "<group>"; };
+		2E67118C04C7E83F141A2226 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2F2CAD7EEE66A29949B944A4 /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
 		5D0366E9732BBF7659218C63 /* LastfmSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmSignatureTests.swift; sourceTree = "<group>"; };
 		6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerMonitor.swift; sourceTree = "<group>"; };
@@ -95,9 +97,18 @@
 			path = Services;
 			sourceTree = "<group>";
 		};
+		95774EC988C0D831A7FBD179 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				2E67118C04C7E83F141A2226 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
 		997F3B0D5DCD7B9D36BD9ACA = {
 			isa = PBXGroup;
 			children = (
+				95774EC988C0D831A7FBD179 /* Resources */,
 				90618AFC8E3FCBC12B3A0C52 /* Sources */,
 				B5ECFD592896B9A2AF45DFF3 /* Tests */,
 				E15FF985D1E1E9BA316E899D /* Products */,
@@ -160,6 +171,7 @@
 			buildConfigurationList = 2261A94260383A56A547AD26 /* Build configuration list for PBXNativeTarget "LastfmModern" */;
 			buildPhases = (
 				65710E5A6A3ED6F64CE566BE /* Sources */,
+				3523A2AFDE09702557DF25E4 /* Resources */,
 			);
 			buildRules = (
 			);
@@ -202,6 +214,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		3523A2AFDE09702557DF25E4 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				FA59949C2971354EDE40DDE6 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		65710E5A6A3ED6F64CE566BE /* Sources */ = {
@@ -268,6 +291,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LastfmModern;
+				INFOPLIST_KEY_CFBundleIconFile = AppIcon.icns;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright (c) 2026";
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -286,6 +310,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				COMBINE_HIDPI_IMAGES = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = LastfmModern;
+				INFOPLIST_KEY_CFBundleIconFile = AppIcon.icns;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.music";
 				INFOPLIST_KEY_NSHumanReadableCopyright = "Copyright (c) 2026";
 				LD_RUNPATH_SEARCH_PATHS = (
