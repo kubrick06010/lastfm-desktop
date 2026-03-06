@@ -99,6 +99,20 @@ private struct DiagnosticsView: View {
                         if let nextRetryAt = scrobbleService.nextRetryAt {
                             diagnosticsRow("Next Retry", nextRetryAt.formatted())
                         }
+
+                        HStack(spacing: 10) {
+                            Button("Retry now") {
+                                Task { await scrobbleService.retryQueueNow() }
+                            }
+                            .buttonStyle(.borderedProminent)
+
+                            Button("Clear queue") {
+                                scrobbleService.clearQueue()
+                            }
+                            .buttonStyle(.bordered)
+                            .disabled(scrobbleService.queuedScrobbles.isEmpty)
+                        }
+                        .padding(.top, 4)
                     }
                     .font(.custom("Avenir Next Medium", size: 12))
                     .padding(.top, 2)

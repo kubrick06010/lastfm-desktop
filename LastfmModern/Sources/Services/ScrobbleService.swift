@@ -420,6 +420,18 @@ final class ScrobbleService: ObservableObject {
         queueIfEligible(currentTrack)
     }
 
+    func retryQueueNow() async {
+        guard scrobblingEnabled, isAuthenticated else { return }
+        resetRetryBackoff()
+        await submitQueued()
+    }
+
+    func clearQueue() {
+        queuedScrobbles.removeAll()
+        resetRetryBackoff()
+        persistQueue()
+    }
+
     private func handlePlayerEvent(_ event: PlayerEvent) {
         playerEventCount += 1
         switch event {
@@ -618,6 +630,8 @@ final class ScrobbleService: ObservableObject {
                 guard !Task.isCancelled else { return }
                 self.isRetryScheduled = false
                 self.nextRetryAt = nil
+                // Clear task reference before submit; submitQueued() may reset retry state.
+                self.retryTask = nil
             }
             guard !Task.isCancelled else { return }
             await submitQueued()
