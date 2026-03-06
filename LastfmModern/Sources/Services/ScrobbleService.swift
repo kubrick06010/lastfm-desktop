@@ -371,27 +371,46 @@ final class ScrobbleService: ObservableObject {
         cancelRetrySchedule()
         queueSubmitAttempts += 1
         lastAPIError = nil
-        var failedIndex: Int?
+        var pending = queuedScrobbles
+        var shouldRetry = false
+        var shouldStop = false
 
-        for (index, track) in queuedScrobbles.enumerated() {
+        while let track = pending.first, !shouldStop {
             do {
                 try await api.scrobble(track)
                 recentScrobbles[track.fingerprint] = .now
+                pending.removeFirst()
             } catch {
-                failedIndex = index
                 queueSubmitFailures += 1
                 handle(error: error)
-                break
+
+                if isRetryableSubmissionError(error) {
+                    shouldRetry = true
+                    break
+                }
+
+                // Drop permanently-failing scrobbles so the queue can keep moving.
+                pending.removeFirst()
+
+                if let apiError = error as? LastfmAPIError {
+                    switch apiError {
+                    case .missingSession, .invalidSession, .invalidCredentials:
+                        signOut()
+                        shouldRetry = false
+                        shouldStop = true
+                    default:
+                        break
+                    }
+                }
             }
         }
 
-        if let failedIndex {
-            queuedScrobbles = Array(queuedScrobbles.suffix(from: failedIndex))
-            scheduleRetryIfNeeded()
-        } else {
-            queuedScrobbles.removeAll()
+        queuedScrobbles = pending
+        if queuedScrobbles.isEmpty {
             lastSubmittedAt = .now
             resetRetryBackoff()
+        } else if shouldRetry {
+            scheduleRetryIfNeeded()
         }
         persistQueue()
     }
@@ -530,6 +549,22 @@ final class ScrobbleService: ObservableObject {
 
     private func persistQueue() {
         queueStore.save(queuedScrobbles)
+    }
+
+    private func isRetryableSubmissionError(_ error: Error) -> Bool {
+        guard let apiError = error as? LastfmAPIError else {
+            return true
+        }
+        switch apiError {
+        case .networkUnavailable, .transport, .rateLimited:
+            return true
+        case .missingSession, .invalidCredentials, .invalidSession:
+            return false
+        case .invalidResponse:
+            return true
+        case .api:
+            return false
+        }
     }
 
     private func scheduleNowPlayingIfNeeded() {
