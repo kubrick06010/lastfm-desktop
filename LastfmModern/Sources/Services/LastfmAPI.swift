@@ -17,6 +17,7 @@ enum LastfmSignature {
 protocol LastfmAPI {
     var isConfigured: Bool { get }
     var isAuthenticated: Bool { get }
+    var sessionUsername: String? { get }
     func authenticate(username: String, password: String) async throws -> LastfmSession
     func restoreSession(_ session: LastfmSession)
     func clearSession()
@@ -30,6 +31,8 @@ protocol LastfmAPI {
     func fetchUserProfile() async throws -> LastfmUserProfile
     func fetchRecentScrobbles(limit: Int) async throws -> [LastfmRecentScrobble]
     func fetchFriendsListening(limit: Int) async throws -> [LastfmFriendListening]
+    func fetchNeighbours(limit: Int) async throws -> [LastfmNeighbour]
+    func fetchFriendUsernames(user: String, limit: Int) async throws -> [String]
     func fetchTopArtists(period: LastfmTopArtistPeriod, limit: Int) async throws -> [LastfmTopArtist]
     func fetchGlobalTopArtists(limit: Int) async throws -> [String]
     func fetchLovedTracksCount() async throws -> Int?
@@ -157,6 +160,7 @@ struct LastfmUserProfile: Equatable {
     let url: String?
     let imageURL: String?
     let registeredAt: Date?
+    let accountType: String?
 }
 
 struct LastfmRecentScrobble: Equatable, Identifiable {
@@ -177,12 +181,25 @@ struct LastfmFriendListening: Equatable, Identifiable {
     let realname: String?
     let country: String?
     let isSubscriber: Bool
+    let accountType: String?
     let avatarURL: String?
     let track: String?
     let artist: String?
     let imageURL: String?
     let playedAt: Date?
     let nowPlaying: Bool
+}
+
+struct LastfmNeighbour: Equatable, Identifiable {
+    let id: String
+    let user: String
+    let realname: String?
+    let country: String?
+    let isSubscriber: Bool
+    let accountType: String?
+    let avatarURL: String?
+    let profileURL: String?
+    let matchScore: Double?
 }
 
 enum LastfmTopArtistPeriod: String {
@@ -256,6 +273,7 @@ enum LastfmAPIError: LocalizedError {
 final class LastfmAPIClient: LastfmAPI {
     let isConfigured = true
     private(set) var isAuthenticated = false
+    var sessionUsername: String? { session?.name }
 
     private let config: LastfmAPIConfig
     private let urlSession: URLSession
@@ -412,6 +430,13 @@ final class LastfmAPIClient: LastfmAPI {
                 summary: "No detailed metadata available for this track.",
                 tags: []
             )
+        } catch {
+            // Read-only metadata endpoints can fail under signed POST in some
+            // edge cases. Retry via unsigned public GET to keep details usable.
+            payload = try await sendPublicRead(
+                params: params,
+                cachePolicy: .ttl(seconds: 900, staleFallbackSeconds: 86_400)
+            ).payload
         }
         guard let trackData = payload["track"] as? [String: Any] else {
             throw LastfmAPIError.invalidResponse
@@ -456,6 +481,13 @@ final class LastfmAPIClient: LastfmAPI {
                 tags: [],
                 similarArtists: []
             )
+        } catch {
+            // Read-only metadata endpoints can fail under signed POST in some
+            // edge cases. Retry via unsigned public GET to keep details usable.
+            payload = try await sendPublicRead(
+                params: params,
+                cachePolicy: .ttl(seconds: 900, staleFallbackSeconds: 86_400)
+            ).payload
         }
         guard let artistData = payload["artist"] as? [String: Any] else {
             throw LastfmAPIError.invalidResponse
@@ -504,35 +536,65 @@ final class LastfmAPIClient: LastfmAPI {
             country: firstString(userData["country"]),
             url: firstString(userData["url"]),
             imageURL: imageURL(userData["image"]),
-            registeredAt: dateFromUnix(firstString((userData["registered"] as? [String: Any])?["unixtime"]))
+            registeredAt: dateFromUnix(firstString((userData["registered"] as? [String: Any])?["unixtime"])),
+            accountType: firstString(userData["type"])
         )
     }
 
     func fetchRecentScrobbles(limit: Int = 25) async throws -> [LastfmRecentScrobble] {
         let user = try requireSessionName()
-        var params: [String: String] = [
-            "method": "user.getRecentTracks",
-            "user": user,
-            "limit": String(max(1, limit)),
-            "extended": "1"
-        ]
+        let cappedLimit = min(max(1, limit), 2_000)
+        let pageSize = min(200, cappedLimit)
+        var page = 1
+        var totalPages: Int?
+        let maxRequestedPages = Int(ceil(Double(cappedLimit) / Double(pageSize)))
+        var allTracks: [[String: Any]] = []
 
-        let payload = try await send(params: &params, cachePolicy: .ttl(seconds: 20, staleFallbackSeconds: 0)).payload
-        guard let recent = payload["recenttracks"] as? [String: Any] else {
-            throw LastfmAPIError.invalidResponse
+        while page <= maxRequestedPages {
+            if let totalPages, page > totalPages {
+                break
+            }
+            var params: [String: String] = [
+                "method": "user.getRecentTracks",
+                "user": user,
+                "limit": String(pageSize),
+                "page": String(page),
+                "extended": "1"
+            ]
+
+            let payload = try await send(params: &params, cachePolicy: .ttl(seconds: 20, staleFallbackSeconds: 0)).payload
+            guard let recent = payload["recenttracks"] as? [String: Any] else {
+                throw LastfmAPIError.invalidResponse
+            }
+
+            if totalPages == nil,
+               let attr = recent["@attr"] as? [String: Any],
+               let parsedPages = firstInt(attr["totalPages"]),
+               parsedPages > 0 {
+                totalPages = parsedPages
+            }
+
+            let tracksRaw = recent["track"]
+            let tracksArray: [[String: Any]]
+            if let array = tracksRaw as? [[String: Any]] {
+                tracksArray = array
+            } else if let single = tracksRaw as? [String: Any] {
+                tracksArray = [single]
+            } else {
+                tracksArray = []
+            }
+
+            if tracksArray.isEmpty {
+                break
+            }
+            allTracks.append(contentsOf: tracksArray)
+            if allTracks.count >= cappedLimit {
+                break
+            }
+            page += 1
         }
 
-        let tracksRaw = recent["track"]
-        let tracksArray: [[String: Any]]
-        if let array = tracksRaw as? [[String: Any]] {
-            tracksArray = array
-        } else if let single = tracksRaw as? [String: Any] {
-            tracksArray = [single]
-        } else {
-            tracksArray = []
-        }
-
-        return tracksArray.map { item in
+        return Array(allTracks.prefix(cappedLimit)).map { item in
             let attr = item["@attr"] as? [String: Any]
             let dateValue = item["date"] as? [String: Any]
             let uts = firstString(dateValue?["uts"])
@@ -613,6 +675,7 @@ final class LastfmAPIClient: LastfmAPI {
                 let realname = firstString(user["realname"])
                 let country = firstString(user["country"])
                 let isSubscriber = boolValue(user["subscriber"])
+                let accountType = firstString(user["type"])
                 let avatarURL = imageURL(user["image"])
                 let recentTrack = recentTrackObject(user["recenttrack"])
                 let track = firstString(recentTrack?["name"])
@@ -629,6 +692,7 @@ final class LastfmAPIClient: LastfmAPI {
                     realname: realname,
                     country: country,
                     isSubscriber: isSubscriber,
+                    accountType: accountType,
                     avatarURL: avatarURL,
                     track: track,
                     artist: artist,
@@ -712,6 +776,7 @@ final class LastfmAPIClient: LastfmAPI {
                     realname: friend.realname,
                     country: friend.country,
                     isSubscriber: friend.isSubscriber,
+                    accountType: friend.accountType,
                     avatarURL: friend.avatarURL,
                     track: fresh.track ?? friend.track,
                     artist: fresh.artist ?? friend.artist,
@@ -733,6 +798,183 @@ final class LastfmAPIClient: LastfmAPI {
             }
             return $0.user.localizedCaseInsensitiveCompare($1.user) == .orderedAscending
         }
+    }
+
+    func fetchNeighbours(limit: Int = 50) async throws -> [LastfmNeighbour] {
+        let user = try requireSessionName()
+        let cappedLimit = min(max(1, limit), 1000)
+        let pageSize = min(200, cappedLimit)
+        var collected: [LastfmNeighbour] = []
+        var page = 1
+        var totalPages: Int?
+        let requestedMaxPages = Int(ceil(Double(cappedLimit) / Double(pageSize)))
+
+        while page <= requestedMaxPages {
+            if let totalPages, page > totalPages {
+                break
+            }
+
+            var params: [String: String] = [
+                "method": "user.getNeighbours",
+                "user": user,
+                "limit": String(pageSize),
+                "page": String(page)
+            ]
+
+            let payload: [String: Any]
+            do {
+                payload = try await send(
+                    params: &params,
+                    cachePolicy: .ttl(seconds: 30, staleFallbackSeconds: 0)
+                ).payload
+            } catch let LastfmAPIError.api(code, message)
+                where code == 3 && message.localizedCaseInsensitiveContains("invalid method") {
+                // Last.fm has intermittently disabled user.getNeighbours on API.
+                // Fallback to profile page scraping to keep neighbours usable.
+                let scraped = try await scrapeNeighboursFromWeb(user: user, limit: cappedLimit)
+                if !scraped.isEmpty {
+                    return scraped
+                }
+                throw LastfmAPIError.api(code: code, message: message)
+            }
+
+            guard let neighboursData = payload["neighbours"] as? [String: Any] else {
+                throw LastfmAPIError.invalidResponse
+            }
+            if totalPages == nil,
+               let attr = neighboursData["@attr"] as? [String: Any],
+               let parsed = firstInt(attr["totalPages"]),
+               parsed > 0 {
+                totalPages = parsed
+            }
+
+            let usersArray = users(from: neighboursData["user"])
+            if usersArray.isEmpty {
+                break
+            }
+
+            collected.append(contentsOf: usersArray.map { item in
+                let user = firstString(item["name"]) ?? "Unknown User"
+                let matchScore = firstString(item["match"]).flatMap(Double.init)
+                return LastfmNeighbour(
+                    id: user,
+                    user: user,
+                    realname: firstString(item["realname"]),
+                    country: firstString(item["country"]),
+                    isSubscriber: boolValue(item["subscriber"]),
+                    accountType: firstString(item["type"]),
+                    avatarURL: imageURL(item["image"]),
+                    profileURL: firstString(item["url"]),
+                    matchScore: matchScore
+                )
+            })
+
+            if collected.count >= cappedLimit {
+                break
+            }
+            page += 1
+        }
+
+        var deduped: [String: LastfmNeighbour] = [:]
+        for neighbour in collected {
+            let key = neighbour.user.lowercased()
+            guard let existing = deduped[key] else {
+                deduped[key] = neighbour
+                continue
+            }
+            let lhs = neighbour.matchScore ?? 0
+            let rhs = existing.matchScore ?? 0
+            if lhs > rhs {
+                deduped[key] = neighbour
+            }
+        }
+
+        var result = Array(deduped.values)
+        result.sort {
+            let lhs = $0.matchScore ?? 0
+            let rhs = $1.matchScore ?? 0
+            if lhs != rhs {
+                return lhs > rhs
+            }
+            return $0.user.localizedCaseInsensitiveCompare($1.user) == .orderedAscending
+        }
+        if result.count > cappedLimit {
+            result = Array(result.prefix(cappedLimit))
+        }
+        if result.isEmpty {
+            let scraped = try await scrapeNeighboursFromWeb(user: user, limit: cappedLimit)
+            if !scraped.isEmpty {
+                return scraped
+            }
+        }
+        return result
+    }
+
+    func fetchFriendUsernames(user: String, limit: Int = 120) async throws -> [String] {
+        let normalized = user.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !normalized.isEmpty else { return [] }
+
+        let cappedLimit = min(max(1, limit), 300)
+        let pageSize = min(100, cappedLimit)
+        var collected: [String] = []
+        var page = 1
+        var totalPages: Int?
+        let requestedMaxPages = Int(ceil(Double(cappedLimit) / Double(pageSize)))
+
+        while page <= requestedMaxPages {
+            if let totalPages, page > totalPages {
+                break
+            }
+            var params: [String: String] = [
+                "method": "user.getFriends",
+                "user": normalized,
+                "limit": String(pageSize),
+                "page": String(page)
+            ]
+
+            let payload = try await send(
+                params: &params,
+                cachePolicy: .ttl(seconds: 600, staleFallbackSeconds: 86_400)
+            ).payload
+
+            guard let friendsData = payload["friends"] as? [String: Any] else {
+                throw LastfmAPIError.invalidResponse
+            }
+            if totalPages == nil,
+               let attr = friendsData["@attr"] as? [String: Any],
+               let parsed = firstInt(attr["totalPages"]),
+               parsed > 0 {
+                totalPages = parsed
+            }
+
+            let usersArray = users(from: friendsData["user"])
+            if usersArray.isEmpty {
+                break
+            }
+
+            for item in usersArray {
+                guard let name = firstString(item["name"]), !name.isEmpty else { continue }
+                collected.append(name)
+                if collected.count >= cappedLimit {
+                    break
+                }
+            }
+            if collected.count >= cappedLimit {
+                break
+            }
+            page += 1
+        }
+
+        var seen: Set<String> = []
+        var unique: [String] = []
+        unique.reserveCapacity(collected.count)
+        for name in collected {
+            let key = name.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            unique.append(name)
+        }
+        return unique
     }
 
     private func fetchLatestFriendTrack(user: String) async throws -> (track: String?, artist: String?, imageURL: String?, playedAt: Date?, nowPlaying: Bool)? {
@@ -865,6 +1107,116 @@ final class LastfmAPIClient: LastfmAPI {
         return nil
     }
 
+    private func scrapeNeighboursFromWeb(user: String, limit: Int) async throws -> [LastfmNeighbour] {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encodedUser = user.addingPercentEncoding(withAllowedCharacters: allowed) ?? user
+        guard let url = URL(string: "https://www.last.fm/user/\(encodedUser)/neighbours") else {
+            return []
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
+        request.setValue("LastfmModern/1.0", forHTTPHeaderField: "User-Agent")
+
+        let data: Data
+        do {
+            let response = try await urlSession.data(for: request)
+            data = response.0
+        } catch {
+            if let urlError = error as? URLError {
+                switch urlError.code {
+                case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost:
+                    throw LastfmAPIError.networkUnavailable
+                default:
+                    throw LastfmAPIError.transport
+                }
+            }
+            throw LastfmAPIError.transport
+        }
+
+        guard let html = String(data: data, encoding: .utf8), !html.isEmpty else {
+            return []
+        }
+
+        let pattern = #"<li class="[^"]*user-list-item(?![^"]*user-list-item-mobile-ad)[^"]*"[\s\S]*?<h4 class="user-list-name">[\s\S]*?<a[^>]*href="/user/([^"/?#]+)"[\s\S]*?</a>[\s\S]*?<img[^>]*src="([^"]+)""#
+        let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        let percentRegex = try NSRegularExpression(pattern: #"([1-9]\d?|100)\s*%"#, options: [])
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        let sourceLower = user.lowercased()
+        var seen: Set<String> = []
+        var output: [LastfmNeighbour] = []
+        output.reserveCapacity(min(limit, 120))
+
+        for match in regex.matches(in: html, options: [], range: range) {
+            guard match.numberOfRanges >= 3,
+                  let userRange = Range(match.range(at: 1), in: html),
+                  let avatarRange = Range(match.range(at: 2), in: html) else {
+                continue
+            }
+            let rawUser = String(html[userRange])
+            let parsedUser = rawUser.removingPercentEncoding ?? rawUser
+            let trimmedUser = parsedUser.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedUser.isEmpty else { continue }
+            let lower = trimmedUser.lowercased()
+            guard lower != sourceLower else { continue }
+            guard seen.insert(lower).inserted else { continue }
+            let avatar = normalizedImageCandidate(String(html[avatarRange]))
+            let safeEncoded = trimmedUser.addingPercentEncoding(withAllowedCharacters: allowed) ?? trimmedUser
+            let matchScore = extractedNeighbourMatch(from: html, match: match, percentRegex: percentRegex)
+                ?? estimatedNeighbourMatch(rank: output.count, limit: limit)
+
+            output.append(
+                LastfmNeighbour(
+                    id: trimmedUser,
+                    user: trimmedUser,
+                    realname: nil,
+                    country: nil,
+                    isSubscriber: false,
+                    accountType: nil,
+                    avatarURL: avatar,
+                    profileURL: "https://www.last.fm/user/\(safeEncoded)",
+                    matchScore: matchScore
+                )
+            )
+            if output.count >= limit {
+                break
+            }
+        }
+
+        return output
+    }
+
+    private func extractedNeighbourMatch(
+        from html: String,
+        match: NSTextCheckingResult,
+        percentRegex: NSRegularExpression
+    ) -> Double? {
+        guard let rowRange = Range(match.range(at: 0), in: html) else {
+            return nil
+        }
+        let rowHTML = String(html[rowRange])
+        let rowNSRange = NSRange(rowHTML.startIndex..<rowHTML.endIndex, in: rowHTML)
+        guard let percentMatch = percentRegex.firstMatch(in: rowHTML, options: [], range: rowNSRange),
+              let valueRange = Range(percentMatch.range(at: 1), in: rowHTML),
+              let percent = Double(rowHTML[valueRange]) else {
+            return nil
+        }
+        return max(0, min(1, percent / 100.0))
+    }
+
+    private func estimatedNeighbourMatch(rank: Int, limit: Int) -> Double {
+        let boundedLimit = max(1, min(limit, 500))
+        if boundedLimit == 1 {
+            return 0.9
+        }
+        let normalized = Double(rank) / Double(boundedLimit - 1)
+        // Neighbours are ordered by affinity on Last.fm, so rank is a
+        // reasonable fallback score when explicit percentages are unavailable.
+        return max(0.2, min(0.95, 0.95 - (normalized * 0.65)))
+    }
+
     private func users(from value: Any?) -> [[String: Any]] {
         if let array = value as? [[String: Any]] {
             return array
@@ -918,6 +1270,74 @@ final class LastfmAPIClient: LastfmAPI {
         request.httpMethod = "POST"
         request.setValue("application/x-www-form-urlencoded; charset=utf-8", forHTTPHeaderField: "Content-Type")
         request.httpBody = formURLEncoded(bodyParams).data(using: .utf8)
+
+        do {
+            let (data, _) = try await urlSession.data(for: request)
+            let payload = try parsePayload(data)
+
+            if let code = parseErrorCode(payload["error"]) {
+                let message = payload["message"] as? String ?? "Unknown error"
+                throw mapAPIError(code: code, message: message)
+            }
+
+            if cachePolicy.shouldStore {
+                let entry = EndpointCacheEntry(
+                    data: data,
+                    cachedAt: .now,
+                    expiresAt: Date().addingTimeInterval(cachePolicy.ttlSeconds),
+                    staleUntil: Date().addingTimeInterval(cachePolicy.staleFallbackSeconds)
+                )
+                setCachedEntry(entry, for: cacheKey)
+            }
+            return EndpointResponse(payload: payload, fromCache: false)
+        } catch {
+            if error is CancellationError {
+                throw error
+            }
+            if cachePolicy.allowStaleFallback,
+               let entry = cachedEntry(for: cacheKey),
+               entry.staleUntil >= Date() {
+                return try EndpointResponse(payload: parsePayload(entry.data), fromCache: true)
+            }
+            if let error = error as? LastfmAPIError {
+                throw error
+            }
+            if let error = error as? URLError {
+                switch error.code {
+                case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost:
+                    throw LastfmAPIError.networkUnavailable
+                default:
+                    throw LastfmAPIError.transport
+                }
+            }
+            throw LastfmAPIError.transport
+        }
+    }
+
+    private func sendPublicRead(
+        params: [String: String],
+        cachePolicy: EndpointCachePolicy = .none
+    ) async throws -> EndpointResponse {
+        let cacheKey = "public|" + endpointCacheKey(params: params)
+        if let entry = cachedEntry(for: cacheKey), cachePolicy.useFreshCache(for: entry, now: .now) {
+            return try EndpointResponse(payload: parsePayload(entry.data), fromCache: true)
+        }
+
+        var queryItems = params
+        queryItems["api_key"] = config.apiKey
+        queryItems["format"] = "json"
+
+        var components = URLComponents(url: config.endpoint, resolvingAgainstBaseURL: false)
+        components?.queryItems = queryItems
+            .sorted(by: { $0.key < $1.key })
+            .map { URLQueryItem(name: $0.key, value: $0.value) }
+        guard let url = components?.url else {
+            throw LastfmAPIError.invalidResponse
+        }
+
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         do {
             let (data, _) = try await urlSession.data(for: request)
@@ -1028,7 +1448,25 @@ final class LastfmAPIClient: LastfmAPI {
         if let int = value as? Int {
             return int
         }
-        if let string = firstString(value), let int = Int(string) {
+        if let string = firstString(value) {
+            let cleaned = string
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .replacingOccurrences(of: ",", with: "")
+                .replacingOccurrences(of: ".", with: "")
+            if let int = Int(cleaned) {
+                return int
+            }
+        }
+        if let number = value as? NSNumber {
+            return number.intValue
+        }
+        if let double = value as? Double {
+            return Int(double)
+        }
+        if let float = value as? Float {
+            return Int(float)
+        }
+        if let text = value as? String, let int = Int(text) {
             return int
         }
         return nil
@@ -1118,6 +1556,8 @@ final class LastfmAPIClient: LastfmAPI {
 final class LastfmAPIStub: LastfmAPI {
     let isConfigured = false
     private(set) var isAuthenticated = false
+    private var session: LastfmSession?
+    var sessionUsername: String? { session?.name }
 
     func authenticate(username: String, password: String) async throws -> LastfmSession {
         let session = LastfmSession(name: username, key: "stub-session")
@@ -1127,11 +1567,12 @@ final class LastfmAPIStub: LastfmAPI {
     }
 
     func restoreSession(_ session: LastfmSession) {
-        _ = session
+        self.session = session
         isAuthenticated = true
     }
 
     func clearSession() {
+        session = nil
         isAuthenticated = false
     }
 
@@ -1202,7 +1643,8 @@ final class LastfmAPIStub: LastfmAPI {
             country: nil,
             url: nil,
             imageURL: nil,
-            registeredAt: nil
+            registeredAt: nil,
+            accountType: nil
         )
     }
 
@@ -1232,6 +1674,7 @@ final class LastfmAPIStub: LastfmAPI {
                 realname: nil,
                 country: "Unknown",
                 isSubscriber: index % 3 == 0,
+                accountType: index % 3 == 0 ? "subscriber" : (index % 5 == 0 ? "alum" : "user"),
                 avatarURL: nil,
                 track: index % 2 == 0 ? "Track \(index + 1)" : nil,
                 artist: index % 2 == 0 ? "Artist \(index + 1)" : nil,
@@ -1240,6 +1683,50 @@ final class LastfmAPIStub: LastfmAPI {
                 nowPlaying: index == 0
             )
         }
+    }
+
+    func fetchNeighbours(limit: Int) async throws -> [LastfmNeighbour] {
+        let count = max(1, min(limit, 8))
+        var result: [LastfmNeighbour] = []
+        result.reserveCapacity(count)
+        for index in 0..<count {
+            let isSubscriber = index % 3 == 0
+            let accountType: String
+            if index % 5 == 0 {
+                accountType = "alum"
+            } else if isSubscriber {
+                accountType = "subscriber"
+            } else {
+                accountType = "user"
+            }
+            let match = max(0.05, 0.95 - (Double(index) * 0.08))
+            result.append(
+                LastfmNeighbour(
+                    id: "neighbour-\(index)",
+                    user: "neighbour\(index + 1)",
+                    realname: nil,
+                    country: index % 2 == 0 ? "Unknown" : "Spain",
+                    isSubscriber: isSubscriber,
+                    accountType: accountType,
+                    avatarURL: nil,
+                    profileURL: "https://www.last.fm/user/neighbour\(index + 1)",
+                    matchScore: match
+                )
+            )
+        }
+        return result
+    }
+
+    func fetchFriendUsernames(user: String, limit: Int) async throws -> [String] {
+        let seed = [
+            "bbc6music", "degraph", "blessedheart", "himitsuUK", "koralute",
+            "krowder", "lobnasz", "dissserj", "fromaj", "mattazathoth"
+        ]
+        let count = max(1, min(limit, seed.count))
+        if user.lowercased() == (session?.name.lowercased() ?? "") {
+            return Array(seed.prefix(count))
+        }
+        return Array(seed.shuffled().prefix(count))
     }
 
     func fetchTopArtists(period: LastfmTopArtistPeriod, limit: Int) async throws -> [LastfmTopArtist] {

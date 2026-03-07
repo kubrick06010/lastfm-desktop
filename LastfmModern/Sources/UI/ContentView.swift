@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 
 private enum WorkspaceTab: String, CaseIterable, Hashable, Identifiable {
     case dashboard = "Dashboard"
@@ -8,6 +9,7 @@ private enum WorkspaceTab: String, CaseIterable, Hashable, Identifiable {
     case reports = "Reports"
     case charts = "Charts"
     case friends = "Friends"
+    case neighbours = "Neighbours"
     case account = "Account"
 
     var id: String { rawValue }
@@ -28,10 +30,23 @@ private enum WorkspaceTab: String, CaseIterable, Hashable, Identifiable {
             return "list.number"
         case .friends:
             return "person.3.sequence"
+        case .neighbours:
+            return "person.3.fill"
         case .account:
             return "person.crop.circle"
         }
     }
+}
+
+private struct DeepLinkTarget: Identifiable, Equatable {
+    let id: String
+    let scrobble: LastfmRecentScrobble
+}
+
+private struct SocialGraphTarget: Identifiable, Equatable {
+    let id: String
+    let user: String
+    let profileURL: String?
 }
 
 struct ContentView: View {
@@ -40,25 +55,29 @@ struct ContentView: View {
     @State private var username = ""
     @State private var password = ""
     @State private var friendsQuery = ""
+    @State private var neighboursQuery = ""
     @State private var scrobblesQuery = ""
+    @State private var deepLinkTarget: DeepLinkTarget?
+    @State private var socialGraphTarget: SocialGraphTarget?
+    @State private var selectedProfileURL: URL?
 
     var body: some View {
         NavigationSplitView {
             List(WorkspaceTab.allCases, selection: $selectedTab) { tab in
                     Label(tab.rawValue, systemImage: tab.symbol)
                         .tag(tab)
-                        .font(.custom("Avenir Next Medium", size: 14))
+                        .font(.custom("Avenir Next Medium", size: 13))
             }
-            .navigationTitle("LastfmModern")
+            .navigationTitle("Last.fm modern")
             .listStyle(.sidebar)
             .navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 280)
         } detail: {
                 VStack(spacing: 0) {
                     VStack(spacing: 4) {
                         Text("Last.fm Scrobbler")
-                            .font(.custom("Avenir Next Medium", size: 24))
+                            .font(.custom("Avenir Next Medium", size: 21))
                         Text(nowPlayingSubtitle)
-                            .font(.custom("Avenir Next Medium", size: 14))
+                            .font(.custom("Avenir Next Medium", size: 13))
                             .lineLimit(1)
                             .foregroundStyle(.secondary)
                     }
@@ -70,21 +89,166 @@ struct ContentView: View {
                     AppBackdrop()
                     switch selectedTab ?? .dashboard {
                     case .dashboard:
-                        DashboardView()
+                        DashboardView { track, artist, imageURL in
+                            openDeepLink(track: track, artist: artist, imageURL: imageURL)
+                        }
                     case .queue:
                         QueueView()
                     case .profile:
                         ProfileView()
                     case .scrobbles:
-                        ScrobblesView(query: $scrobblesQuery)
+                        ScrobblesView(query: $scrobblesQuery) { item in
+                            openDeepLink(scrobble: item)
+                        }
                     case .reports:
                         ReportsView()
                     case .charts:
-                        ChartsView()
+                        ChartsView(
+                            onOpenTrack: { track, artist in
+                                openDeepLink(track: track, artist: artist)
+                            },
+                            onOpenArtist: { artist in
+                                openDeepLink(track: nil, artist: artist)
+                            }
+                        )
                     case .friends:
-                        FriendsView(query: $friendsQuery)
+                        FriendsView(
+                            query: $friendsQuery,
+                            onOpenFriendTrack: { friend in
+                                if let track = friend.track, let artist = friend.artist {
+                                    openDeepLink(track: track, artist: artist, imageURL: friend.imageURL)
+                                }
+                            },
+                            onOpenGraph: { friend in
+                                openSocialGraph(forUser: friend.user, profileURL: "https://www.last.fm/user/\(friend.user)")
+                            }
+                        )
+                    case .neighbours:
+                        NeighboursView(query: $neighboursQuery) { neighbour in
+                            openSocialGraph(for: neighbour)
+                        }
                     case .account:
                         AccountView(username: $username, password: $password)
+                    }
+
+                    if let deepLinkTarget {
+                        Color.black.opacity(0.35)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.22)) {
+                                    self.deepLinkTarget = nil
+                                    scrobbleService.clearInspection()
+                                }
+                            }
+
+                        VStack {
+                            HStack {
+                                Spacer()
+                                ScrollView {
+                                    VStack(alignment: .leading, spacing: 12) {
+                                        HStack {
+                                            Button {
+                                                withAnimation(.easeInOut(duration: 0.22)) {
+                                                    self.deepLinkTarget = nil
+                                                    scrobbleService.clearInspection()
+                                                }
+                                            } label: {
+                                                Label("Back", systemImage: "chevron.left")
+                                                    .font(.custom("Avenir Next Medium", size: 14))
+                                            }
+                                            .buttonStyle(.plain)
+                                            Spacer()
+                                        }
+
+                                        ScrobbleDetailPanel(item: deepLinkTarget.scrobble)
+                                            .appPanelStyle()
+                                    }
+                                    .padding(16)
+                                }
+                                .frame(width: 460)
+                                .background(.ultraThinMaterial)
+                                .overlay(alignment: .leading) {
+                                    Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1)
+                                }
+                                .transition(.move(edge: .trailing))
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.22), value: deepLinkTarget.id)
+                    }
+
+                    if let socialGraphTarget {
+                        Color.black.opacity(0.35)
+                            .ignoresSafeArea()
+                            .onTapGesture {
+                                withAnimation(.easeInOut(duration: 0.22)) {
+                                    self.socialGraphTarget = nil
+                                    self.selectedProfileURL = nil
+                                }
+                            }
+
+                        VStack {
+                            HStack {
+                                Spacer()
+                                VStack(alignment: .leading, spacing: 10) {
+                                    HStack {
+                                        Button {
+                                            withAnimation(.easeInOut(duration: 0.22)) {
+                                                self.socialGraphTarget = nil
+                                                self.selectedProfileURL = nil
+                                            }
+                                        } label: {
+                                            Label("Back", systemImage: "chevron.left")
+                                                .font(.custom("Avenir Next Medium", size: 14))
+                                        }
+                                        .buttonStyle(.plain)
+                                        Spacer()
+                                        Text("Separation Graph: \(socialGraphTarget.user)")
+                                            .font(.custom("Avenir Next Demi Bold", size: 16))
+                                    }
+
+                                    Text(scrobbleService.separationStatus)
+                                        .font(.custom("Avenir Next Medium", size: 12))
+                                        .foregroundStyle(.secondary)
+
+                                    if let graph = scrobbleService.socialGraph, !graph.nodes.isEmpty {
+                                        InteractiveSeparationGraphView(graph: graph) { username in
+                                            selectedProfileURL = userProfileURL(username: username)
+                                        }
+                                        .frame(height: 300)
+                                        .appPanelStyle()
+                                    } else {
+                                        Text("No graph data available.")
+                                            .font(.custom("Avenir Next Medium", size: 12))
+                                            .foregroundStyle(.secondary)
+                                            .appPanelStyle()
+                                    }
+
+                                    if let selectedProfileURL {
+                                        ProfileWebView(url: selectedProfileURL)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                            .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                            .overlay(
+                                                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                                            )
+                                    } else {
+                                        Text("Click a node to open profile in-app.")
+                                            .font(.custom("Avenir Next Medium", size: 12))
+                                            .foregroundStyle(.secondary)
+                                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                                            .appPanelStyle()
+                                    }
+                                }
+                                .padding(16)
+                                .frame(width: 760, height: 760)
+                                .background(.ultraThinMaterial)
+                                .overlay(alignment: .leading) {
+                                    Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1)
+                                }
+                                .transition(.move(edge: .trailing))
+                            }
+                        }
+                        .animation(.easeInOut(duration: 0.22), value: socialGraphTarget.id)
                     }
                 }
 
@@ -113,6 +277,64 @@ struct ContentView: View {
             return "\(current.artist) - \(current.title)"
         }
         return "No track playing"
+    }
+
+    private func openDeepLink(scrobble: LastfmRecentScrobble) {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            deepLinkTarget = DeepLinkTarget(id: scrobble.id, scrobble: scrobble)
+        }
+        Task {
+            await scrobbleService.inspect(scrobble: scrobble)
+        }
+    }
+
+    private func openDeepLink(track: String?, artist: String, imageURL: String? = nil) {
+        let title = track?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? track! : artist
+        let item = LastfmRecentScrobble(
+            id: "deep-\(artist)|\(title)",
+            track: title,
+            artist: artist,
+            album: nil,
+            imageURL: imageURL,
+            url: nil,
+            loved: false,
+            playedAt: nil,
+            nowPlaying: false
+        )
+        openDeepLink(scrobble: item)
+    }
+
+    private func openSocialGraph(for neighbour: LastfmNeighbour) {
+        openSocialGraph(forUser: neighbour.user, profileURL: neighbour.profileURL)
+    }
+
+    private func openSocialGraph(forUser user: String, profileURL: String?) {
+        withAnimation(.easeInOut(duration: 0.22)) {
+            deepLinkTarget = nil
+            socialGraphTarget = SocialGraphTarget(
+                id: user.lowercased(),
+                user: user,
+                profileURL: profileURL
+            )
+            selectedProfileURL = profileURLString(profileURL, fallbackUser: user)
+        }
+        Task {
+            await scrobbleService.prepareSocialGraph(for: user)
+        }
+    }
+
+    private func profileURLString(_ raw: String?, fallbackUser: String) -> URL? {
+        if let raw, let url = URL(string: raw) {
+            return url
+        }
+        return userProfileURL(username: fallbackUser)
+    }
+
+    private func userProfileURL(username: String) -> URL? {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encoded = username.addingPercentEncoding(withAllowedCharacters: allowed) ?? username
+        return URL(string: "https://www.last.fm/user/\(encoded)")
     }
 }
 
@@ -155,77 +377,156 @@ private struct BottomTabShell: View {
 
 private struct DashboardView: View {
     @EnvironmentObject private var scrobbleService: ScrobbleService
+    let onOpenTrackDetail: (_ track: String, _ artist: String, _ imageURL: String?) -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 18) {
                 Text("Listening Dashboard")
-                    .font(.custom("Avenir Next Medium", size: 30))
+                    .font(.custom("Avenir Next Medium", size: 24))
                     .foregroundStyle(.primary)
 
-                NowPlayingView(compact: false)
+                if let nowPlaying = scrobbleService.currentTrack {
+                    ZStack {
+                        dashboardBackgroundArt(
+                            dashboardHeroImageURL
+                        )
 
-                if let track = scrobbleService.currentTrackDetails {
-                    HStack(alignment: .top, spacing: 12) {
-                        dashboardArt(track.imageURL)
-                        VStack(alignment: .leading, spacing: 6) {
-                            Text(track.name)
-                                .font(.custom("Avenir Next Medium", size: 24))
-                            Text("by \(track.artist)")
-                                .font(.custom("Avenir Next Medium", size: 18))
-                            if let album = track.album {
-                                Text("from \(album)")
-                                    .font(.custom("Avenir Next Medium", size: 14))
-                                    .foregroundStyle(.secondary)
+                        VStack(alignment: .leading, spacing: 14) {
+                            HStack {
+                                Label {
+                                    Text("Scrobbling from \(nowPlaying.sourceApp ?? "Music")")
+                                        .font(.custom("Avenir Next Medium", size: 15))
+                                } icon: {
+                                    Image(systemName: "music.note")
+                                        .font(.system(size: 15, weight: .semibold))
+                                }
+                                Spacer()
+                                dashboardMiniProgress
                             }
-                            Text("Listeners: \(count(track.listeners)) · Plays: \(count(track.playcount)) · Yours: \(count(track.userPlaycount))")
-                                .font(.custom("Avenir Next Medium", size: 12))
-                                .foregroundStyle(.secondary)
-                            if !track.tags.isEmpty {
-                                Text("Tags: \(track.tags.prefix(8).joined(separator: " · "))")
-                                    .font(.custom("Avenir Next Medium", size: 12))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
-                        Spacer()
-                    }
-                    .appPanelStyle()
-                }
 
-                if let artist = scrobbleService.currentArtistDetails {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text(artist.name)
-                            .font(.custom("Avenir Next Medium", size: 24))
-                        Text(artist.summary ?? "No artist description available.")
-                            .font(.custom("Avenir Next Regular", size: 13))
-                            .lineLimit(4)
-                        if !artist.similarArtists.isEmpty {
-                            Text("Similar Artists")
-                                .font(.custom("Avenir Next Medium", size: 13))
-                            HStack(spacing: 12) {
-                                ForEach(artist.similarArtists.prefix(5)) { similar in
-                                    VStack(spacing: 3) {
-                                        dashboardArt(similar.imageURL, size: 52)
-                                        Text(similar.name)
-                                            .font(.custom("Avenir Next Regular", size: 11))
-                                            .lineLimit(1)
+                            Divider().overlay(Color.white.opacity(0.10))
+
+                            HStack(alignment: .top, spacing: 14) {
+                                dashboardArt(dashboardTrackImageURL, size: 132)
+                                    .onTapGesture {
+                                        openDetailForCurrentTrack(nowPlaying)
+                                    }
+
+                                VStack(alignment: .leading, spacing: 6) {
+                                    Text(scrobbleService.currentTrackDetails?.name ?? nowPlaying.title)
+                                        .font(.custom("Avenir Next Demi Bold", size: 28))
+                                        .lineLimit(3)
+                                        .contentShape(Rectangle())
+                                        .onTapGesture {
+                                            openDetailForCurrentTrack(nowPlaying)
+                                        }
+                                        .simultaneousGesture(
+                                            MagnificationGesture()
+                                                .onEnded { value in
+                                                    guard value > 1.05 else { return }
+                                                    openDetailForCurrentTrack(nowPlaying)
+                                                }
+                                        )
+                                    Text("by \(scrobbleService.currentTrackDetails?.artist ?? nowPlaying.artist)")
+                                        .font(.custom("Avenir Next Demi Bold", size: 18))
+                                        .foregroundStyle(.secondary)
+                                    if let album = scrobbleService.currentTrackDetails?.album ?? nowPlaying.album {
+                                        Text("from \(album)")
+                                            .font(.custom("Avenir Next Medium", size: 14))
+                                            .foregroundStyle(.secondary)
+                                    }
+                                    HStack(spacing: 14) {
+                                        Image(systemName: "heart")
+                                        Image(systemName: "tag")
+                                        Image(systemName: "square.and.arrow.up")
+                                    }
+                                    .font(.system(size: 18, weight: .medium))
+                                    .foregroundStyle(.secondary)
+                                    .padding(.top, 2)
+                                }
+                                Spacer()
+                            }
+
+                            trackInsightsCard
+
+                            Divider().overlay(Color.white.opacity(0.10))
+
+                            VStack(alignment: .leading, spacing: 10) {
+                                Text(scrobbleService.currentArtistDetails?.name ?? nowPlaying.artist)
+                                    .font(.custom("Avenir Next Demi Bold", size: 22))
+
+                                HStack(alignment: .top, spacing: 14) {
+                                    dashboardArt(scrobbleService.currentArtistDetails?.imageURL ?? dashboardTrackImageURL, size: 126)
+                                    Text(artistSummaryText)
+                                        .font(.custom("Avenir Next Regular", size: 15))
+                                        .lineLimit(6)
+                                        .foregroundStyle(.secondary)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+
+                                HStack(spacing: 0) {
+                                    statColumn("Listeners", scrobbleService.currentArtistDetails?.listeners)
+                                    statColumn("Plays", scrobbleService.currentArtistDetails?.playcount)
+                                    statColumn("Plays in your library", scrobbleService.currentTrackDetails?.userPlaycount)
+                                }
+                                .overlay {
+                                    HStack {
+                                        Divider().frame(height: 36)
+                                        Spacer()
+                                        Divider().frame(height: 36)
+                                    }
+                                    .padding(.horizontal, 12)
+                                    .opacity(0.35)
+                                }
+
+                                if let tags = scrobbleService.currentArtistDetails?.tags, !tags.isEmpty {
+                                    Text("Popular tags: \(tags.prefix(6).joined(separator: " · "))")
+                                        .font(.custom("Avenir Next Medium", size: 14))
+                                        .foregroundStyle(.secondary)
+                                }
+
+                                if let similar = scrobbleService.currentArtistDetails?.similarArtists, !similar.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Similar Artists")
+                                            .font(.custom("Avenir Next Demi Bold", size: 18))
+                                        ScrollView(.horizontal, showsIndicators: false) {
+                                            HStack(spacing: 18) {
+                                                ForEach(similar.prefix(6), id: \.name) { item in
+                                                    VStack(alignment: .leading, spacing: 6) {
+                                                        dashboardArt(item.imageURL, size: 72)
+                                                        Text(item.name)
+                                                            .font(.custom("Avenir Next Medium", size: 14))
+                                                            .lineLimit(1)
+                                                    }
+                                                    .frame(width: 90, alignment: .leading)
+                                                }
+                                            }
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                    .appPanelStyle()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(22)
+                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16, style: .continuous)
+                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                    )
+                } else {
+                    Text("No track detected.")
+                        .font(.custom("Avenir Next Medium", size: 14))
+                        .foregroundStyle(.secondary)
+                        .padding(20)
+                        .appPanelStyle()
                 }
 
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                HStack(spacing: 12) {
                     MetricCard(title: "Queued", value: "\(scrobbleService.queuedScrobbles.count)", icon: "shippingbox")
-                    MetricCard(title: "Submit Failures", value: "\(scrobbleService.queueSubmitFailures)", icon: "exclamationmark.triangle")
-                    MetricCard(title: "Player Events", value: "\(scrobbleService.playerEventCount)", icon: "waveform")
-                    MetricCard(
-                        title: "Next Retry",
-                        value: scrobbleService.nextRetryAt?.formatted(date: .omitted, time: .standard) ?? "None",
-                        icon: "clock.arrow.trianglehead.counterclockwise.rotate.90"
-                    )
+                    MetricCard(title: "Failures", value: "\(scrobbleService.queueSubmitFailures)", icon: "exclamationmark.triangle")
+                    MetricCard(title: "Events", value: "\(scrobbleService.playerEventCount)", icon: "waveform")
                 }
                 .animation(.spring(response: 0.35, dampingFraction: 0.82), value: scrobbleService.queuedScrobbles.count)
             }
@@ -253,8 +554,136 @@ private struct DashboardView: View {
         }
     }
 
+    @ViewBuilder
+    private func dashboardBackgroundArt(_ urlString: String?) -> some View {
+        ZStack {
+            if let urlString, let url = URL(string: urlString) {
+                AsyncImage(url: url) { phase in
+                    switch phase {
+                    case let .success(image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                            .blur(radius: 30)
+                            .saturation(0.65)
+                            .opacity(0.42)
+                    default:
+                        Color.clear
+                    }
+                }
+            }
+            // Subtle bokeh highlights.
+            Circle()
+                .fill(Color.white.opacity(0.09))
+                .frame(width: 260, height: 260)
+                .blur(radius: 22)
+                .offset(x: 160, y: -80)
+            Circle()
+                .fill(Color.blue.opacity(0.14))
+                .frame(width: 220, height: 220)
+                .blur(radius: 18)
+                .offset(x: -180, y: 60)
+            LinearGradient(
+                colors: [Color.black.opacity(0.24), Color.black.opacity(0.52)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .allowsHitTesting(false)
+    }
+
+    private var playbackChip: some View {
+        Text(scrobbleService.playbackState)
+            .font(.custom("Avenir Next Medium", size: 12))
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .foregroundStyle(scrobbleService.playbackState == "Playing" ? .green : .secondary)
+            .background(
+                (scrobbleService.playbackState == "Playing" ? Color.green : Color.white)
+                    .opacity(0.12),
+                in: Capsule()
+            )
+    }
+
+    private var dashboardMiniProgress: some View {
+        VStack(alignment: .trailing, spacing: 4) {
+            playbackChip
+            ProgressView(value: scrobbleService.scrobbleProgress, total: 1)
+                .frame(width: 90)
+                .progressViewStyle(.linear)
+            Text("\(Int(scrobbleService.elapsedForCurrentTrack))s / \(Int(scrobbleService.scrobbleThreshold))s")
+                .font(.custom("Avenir Next Medium", size: 11))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var trackInsightsCard: some View {
+        // Mirrors the legacy client "you listened X times" callout while gracefully
+        // degrading when Last.fm omits user-specific counters.
+        Text("You've listened to \(scrobbleService.currentTrackDetails?.artist ?? scrobbleService.currentTrack?.artist ?? "this artist") \(count(scrobbleService.currentArtistDetails?.userPlaycount)) times and \(scrobbleService.currentTrackDetails?.name ?? scrobbleService.currentTrack?.title ?? "this track") \(count(scrobbleService.currentTrackDetails?.userPlaycount)) time(s).")
+            .font(.custom("Avenir Next Medium", size: 14))
+            .padding(12)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    private var artistSummaryText: String {
+        if let summary = scrobbleService.currentArtistDetails?.summary, !summary.isEmpty {
+            return summary
+        }
+        return "Artist biography and stats are temporarily unavailable."
+    }
+
+    private func statColumn(_ title: String, _ value: Int?) -> some View {
+        VStack(alignment: .leading, spacing: 1) {
+            Text(count(value))
+                .font(.custom("Avenir Next Demi Bold", size: 20))
+            Text(title)
+                .font(.custom("Avenir Next Medium", size: 12))
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func openDetailForCurrentTrack(_ nowPlaying: Track) {
+        onOpenTrackDetail(
+            scrobbleService.currentTrackDetails?.name ?? nowPlaying.title,
+            scrobbleService.currentTrackDetails?.artist ?? nowPlaying.artist,
+            dashboardTrackImageURL
+        )
+    }
+
+    private var dashboardHeroImageURL: String? {
+        // Prefer artist hero art for background bokeh; fallback to resolved track artwork.
+        scrobbleService.currentArtistDetails?.imageURL ?? dashboardTrackImageURL
+    }
+
+    private var dashboardTrackImageURL: String? {
+        // Artwork resolution chain:
+        // 1) track.getInfo image
+        // 2) matching recent scrobble image (same title + artist)
+        // 3) artist image as final fallback.
+        if let explicit = scrobbleService.currentTrackDetails?.imageURL, !explicit.isEmpty {
+            return explicit
+        }
+        guard let now = scrobbleService.currentTrack else {
+            return scrobbleService.currentArtistDetails?.imageURL
+        }
+        let normalizedTitle = now.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        let normalizedArtist = now.artist.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        if let matched = scrobbleService.latestScrobbles.first(where: {
+            $0.track.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedTitle &&
+            $0.artist.trimmingCharacters(in: .whitespacesAndNewlines).lowercased() == normalizedArtist &&
+            ($0.imageURL?.isEmpty == false)
+        })?.imageURL {
+            return matched
+        }
+        return scrobbleService.currentArtistDetails?.imageURL
+    }
+
     private func count(_ value: Int?) -> String {
-        (value ?? 0).formatted()
+        value.map { $0.formatted() } ?? "—"
     }
 }
 
@@ -535,13 +964,8 @@ private struct ProfileView: View {
                     HStack(alignment: .top, spacing: 12) {
                         VStack(spacing: 6) {
                             profileAvatar(profile.imageURL)
-                            if scrobbleService.isSubscriber {
-                                Text("SUBSCRIBER")
-                                    .font(.custom("Avenir Next Medium", size: 9))
-                                    .foregroundStyle(.white)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 3)
-                                    .background(.black, in: Capsule())
+                            if let accountBadge = accountBadgeType(profile: profile) {
+                                badgeView(accountBadge, fontSize: 10, horizontal: 8, vertical: 3)
                             }
                         }
                         VStack(alignment: .leading, spacing: 8) {
@@ -701,18 +1125,10 @@ private struct ProfileView: View {
     @ViewBuilder
     private func profileAvatar(_ urlString: String?) -> some View {
         if let urlString, let url = URL(string: urlString) {
-            AsyncImage(url: url) { phase in
-                switch phase {
-                case let .success(image):
-                    image.resizable().scaledToFill()
-                default:
-                    Image(systemName: "person.crop.circle.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .foregroundStyle(.secondary)
-                        .padding(6)
-                }
-            }
+            AnimatedAvatarImage(
+                urls: animatedAvatarCandidates(for: url),
+                size: 56
+            )
             .frame(width: 56, height: 56)
             .clipShape(Circle())
         } else {
@@ -722,6 +1138,23 @@ private struct ProfileView: View {
                 .foregroundStyle(.secondary)
                 .frame(width: 56, height: 56)
         }
+    }
+
+    private func animatedAvatarCandidates(for baseURL: URL) -> [URL] {
+        var candidates: [URL] = []
+        // Last.fm often exposes avatar PNG URLs that redirect to GIF when animated.
+        // Trying GIF first avoids rendering static avatars for animated profiles.
+        let path = baseURL.path.lowercased()
+        if path.contains("/avatar"), path.hasSuffix(".png") {
+            var comps = URLComponents(url: baseURL, resolvingAgainstBaseURL: false)
+            let gifPath = baseURL.path.replacingOccurrences(of: ".png", with: ".gif")
+            comps?.path = gifPath
+            if let gifURL = comps?.url {
+                candidates.append(gifURL)
+            }
+        }
+        candidates.append(baseURL)
+        return candidates
     }
 
     private var weeklyMax: Int {
@@ -735,128 +1168,126 @@ private struct ProfileView: View {
     private var profileArtistCount: Int? {
         scrobbleService.profile?.artistCount
     }
+
+    private func accountBadgeType(profile: LastfmUserProfile) -> String? {
+        if let raw = profile.accountType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !raw.isEmpty {
+            return raw
+        }
+        return scrobbleService.isSubscriber ? "subscriber" : nil
+    }
+
+    private func badgeView(_ type: String, fontSize: CGFloat, horizontal: CGFloat, vertical: CGFloat) -> some View {
+        let normalized = type.lowercased()
+        let label = normalized == "alum" ? "ALUM" : "LAST.FM PRO"
+        let fill: AnyShapeStyle = normalized == "alum"
+            ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.55, green: 0.14, blue: 1.0), Color(red: 0.70, green: 0.26, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
+            : AnyShapeStyle(Color.black)
+
+        return Text(label)
+            .font(.custom("Avenir Next Demi Bold", size: fontSize))
+            .tracking(0.5)
+            .foregroundStyle(.white)
+            .padding(.horizontal, horizontal)
+            .padding(.vertical, vertical)
+            .background(fill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
 }
 
 private struct ScrobblesView: View {
     @EnvironmentObject private var scrobbleService: ScrobbleService
     @Environment(\.openURL) private var openURL
     @Binding var query: String
-    @State private var selected: LastfmRecentScrobble?
+    let onOpenDetail: (LastfmRecentScrobble) -> Void
 
     var body: some View {
-        ZStack {
-            if let selected {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        Button {
-                            withAnimation(.easeInOut(duration: 0.25)) {
-                                self.selected = nil
-                                scrobbleService.clearInspection()
-                            }
-                        } label: {
-                            Label("Back to Scrobbles", systemImage: "chevron.left")
-                                .font(.custom("Avenir Next Medium", size: 16))
-                        }
-                        .buttonStyle(.plain)
-                        ScrobbleDetailPanel(item: selected)
-                            .appPanelStyle()
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("Your Scrobbles")
+                        .font(.custom("Avenir Next Demi Bold", size: 28))
+                    Spacer()
+                    Button("Refresh") {
+                        Task { await scrobbleService.refreshScrobbles() }
                     }
-                    .padding(24)
+                    .buttonStyle(.borderedProminent)
                 }
-                .transition(.move(edge: .trailing))
-            } else {
-                ScrollView {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack {
-                            Text("Your Scrobbles")
-                                .font(.custom("Avenir Next Demi Bold", size: 28))
-                            Spacer()
-                            Button("Refresh") {
-                                Task { await scrobbleService.refreshScrobbles() }
-                            }
-                            .buttonStyle(.borderedProminent)
-                        }
 
-                        TextField("Filter scrobbles", text: $query)
-                            .textFieldStyle(.roundedBorder)
-                            .appPanelStyle()
+                TextField("Filter scrobbles", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .appPanelStyle()
 
-                        Text(scrobbleService.scrobblesStatus)
-                            .font(.custom("Avenir Next Medium", size: 12))
-                            .foregroundStyle(.secondary)
+                Text(scrobbleService.scrobblesStatus)
+                    .font(.custom("Avenir Next Medium", size: 12))
+                    .foregroundStyle(.secondary)
 
-                        if filteredScrobbles.isEmpty {
-                            Text("No recent scrobbles available.")
-                                .font(.custom("Avenir Next Regular", size: 13))
-                                .foregroundStyle(.secondary)
-                                .appPanelStyle()
-                        } else {
-                            LazyVStack(alignment: .leading, spacing: 8) {
-                                ForEach(filteredScrobbles) { item in
-                                    HStack(spacing: 10) {
-                                        HStack(spacing: 10) {
-                                            scrobbleArtwork(item.imageURL, nowPlaying: item.nowPlaying)
-                                            VStack(alignment: .leading, spacing: 2) {
-                                                Text(item.track)
-                                                    .font(.custom("Avenir Next Medium", size: 13))
-                                                Text(item.artist)
-                                                    .font(.custom("Avenir Next Regular", size: 12))
-                                                    .foregroundStyle(.secondary)
-                                            }
-                                        }
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            withAnimation(.easeInOut(duration: 0.25)) {
-                                                selected = item
-                                            }
-                                            Task {
-                                                await scrobbleService.inspect(scrobble: item)
-                                            }
-                                        }
-                                        Spacer()
-                                        HStack(spacing: 10) {
-                                            Button {
-                                                Task { await scrobbleService.toggleLove(scrobble: item) }
-                                            } label: {
-                                                Image(systemName: item.loved ? "heart.fill" : "heart")
-                                            }
-                                            .buttonStyle(.plain)
-                                            Button {
-                                                openSearchTag(item)
-                                            } label: {
-                                                Image(systemName: "tag")
-                                            }
-                                            .buttonStyle(.plain)
-                                            if let url = externalURL(for: item) {
-                                                Button {
-                                                    openURL(url)
-                                                } label: {
-                                                    Image(systemName: "arrow.up.right.square")
-                                                }
-                                                .buttonStyle(.plain)
-                                            }
-                                        }
-                                        .font(.system(size: 13))
-                                        .foregroundStyle(.secondary)
-                                        Text(item.nowPlaying ? "Now" : (item.playedAt?.formatted(date: .omitted, time: .shortened) ?? "-"))
-                                            .font(.custom("Avenir Next Regular", size: 11))
+                if filteredScrobbles.isEmpty {
+                    Text("No recent scrobbles available.")
+                        .font(.custom("Avenir Next Regular", size: 13))
+                        .foregroundStyle(.secondary)
+                        .appPanelStyle()
+                } else {
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(filteredScrobbles) { item in
+                            HStack(spacing: 10) {
+                                HStack(spacing: 10) {
+                                    scrobbleArtwork(item.imageURL, nowPlaying: item.nowPlaying)
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(item.track)
+                                            .font(.custom("Avenir Next Medium", size: 13))
+                                        Text(item.artist)
+                                            .font(.custom("Avenir Next Regular", size: 12))
                                             .foregroundStyle(.secondary)
                                     }
-                                    .padding(.vertical, 2)
-                                    .padding(.horizontal, 8)
-                                    .padding(.vertical, 6)
-                                    .background(item.nowPlaying ? Color.yellow.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                                 }
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    onOpenDetail(item)
+                                }
+
+                                Spacer()
+
+                                HStack(spacing: 10) {
+                                    Button {
+                                        Task { await scrobbleService.toggleLove(scrobble: item) }
+                                    } label: {
+                                        Image(systemName: item.loved ? "heart.fill" : "heart")
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    Button {
+                                        openSearchTag(item)
+                                    } label: {
+                                        Image(systemName: "tag")
+                                    }
+                                    .buttonStyle(.plain)
+
+                                    if let url = externalURL(for: item) {
+                                        Button {
+                                            openURL(url)
+                                        } label: {
+                                            Image(systemName: "arrow.up.right.square")
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                                .font(.system(size: 13))
+                                .foregroundStyle(.secondary)
+
+                                Text(item.nowPlaying ? "Now" : (item.playedAt?.formatted(date: .omitted, time: .shortened) ?? "-"))
+                                    .font(.custom("Avenir Next Regular", size: 11))
+                                    .foregroundStyle(.secondary)
                             }
-                            .appPanelStyle()
+                            .padding(.vertical, 2)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 6)
+                            .background(item.nowPlaying ? Color.yellow.opacity(0.25) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
                         }
                     }
-                    .padding(24)
+                    .appPanelStyle()
                 }
-                .transition(.move(edge: .leading))
             }
+            .padding(24)
         }
-        .animation(.easeInOut(duration: 0.25), value: selected?.id)
     }
 
     @ViewBuilder
@@ -986,7 +1417,7 @@ private struct ScrobbleDetailPanel: View {
                     artistArt(artist.imageURL)
                     Text(artist.summary ?? "No artist biography available.")
                         .font(.custom("Avenir Next Regular", size: 14))
-                        .lineLimit(5)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
                 HStack(spacing: 18) {
                     stat("Listeners", artist.listeners)
@@ -1059,7 +1490,7 @@ private struct ScrobbleDetailPanel: View {
 
     private func stat(_ title: String, _ value: Int?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text((value ?? 0).formatted())
+            Text(value.map { $0.formatted() } ?? "—")
                 .font(.custom("Avenir Next Demi Bold", size: 22))
             Text(title)
                 .font(.custom("Avenir Next Medium", size: 12))
@@ -1077,7 +1508,7 @@ private struct ReportsView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Reports")
-                    .font(.custom("Avenir Next Demi Bold", size: 30))
+                    .font(.custom("Avenir Next Demi Bold", size: 24))
 
                 Picker("Period", selection: $period) {
                     ForEach(ReportPeriod.allCases, id: \.self) { option in
@@ -1088,11 +1519,11 @@ private struct ReportsView: View {
                 .appPanelStyle()
 
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("\(thisWeekCount.formatted()) Scrobbles")
-                        .font(.custom("Avenir Next Demi Bold", size: 44))
-                    Text("vs. \(lastWeekCount.formatted()) last week")
-                        .font(.custom("Avenir Next Medium", size: 24))
-                    Text("Week trend: \(trendPercentString)")
+                    Text("\(currentCount.formatted()) Scrobbles")
+                        .font(.custom("Avenir Next Demi Bold", size: 34))
+                    Text("vs. \(comparisonCount.formatted()) \(comparisonTitle)")
+                        .font(.custom("Avenir Next Medium", size: 20))
+                    Text("\(periodTitle) trend: \(trendPercentString)")
                         .font(.custom("Avenir Next Medium", size: 15))
                         .foregroundStyle(.secondary)
                 }
@@ -1100,15 +1531,15 @@ private struct ReportsView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Avg. scrobbles per day")
-                        .font(.custom("Avenir Next Demi Bold", size: 34))
-                    reportBar("This week", value: thisWeekAvg, max: max(thisWeekAvg, lastWeekAvg))
-                    reportBar("Last week", value: lastWeekAvg, max: max(thisWeekAvg, lastWeekAvg))
+                        .font(.custom("Avenir Next Demi Bold", size: 28))
+                    reportBar("This \(periodTitle)", value: currentAvg, max: max(currentAvg, comparisonAvg))
+                    reportBar(period.previousLabel, value: comparisonAvg, max: max(currentAvg, comparisonAvg))
                 }
                 .appPanelStyle()
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Top tags")
-                        .font(.custom("Avenir Next Demi Bold", size: 34))
+                        .font(.custom("Avenir Next Demi Bold", size: 28))
                     if topTags.isEmpty {
                         Text("No tags available yet.")
                             .foregroundStyle(.secondary)
@@ -1122,7 +1553,7 @@ private struct ReportsView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Listening clock")
-                        .font(.custom("Avenir Next Demi Bold", size: 34))
+                        .font(.custom("Avenir Next Demi Bold", size: 28))
                     Text("You scrobbled the most at \(peakHourLabel) this period.")
                         .font(.custom("Avenir Next Medium", size: 14))
                         .foregroundStyle(.secondary)
@@ -1137,7 +1568,7 @@ private struct ReportsView: View {
 
                 VStack(alignment: .leading, spacing: 8) {
                     Text("Mainstream score")
-                        .font(.custom("Avenir Next Demi Bold", size: 34))
+                        .font(.custom("Avenir Next Demi Bold", size: 28))
                     Text("With a \(mainstreamScore)% mainstream score, you are \(mainstreamTone) compared to your recent baseline.")
                         .font(.custom("Avenir Next Medium", size: 15))
                         .foregroundStyle(.secondary)
@@ -1150,7 +1581,7 @@ private struct ReportsView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("Trends vs. \(comparisonTitle)")
-                        .font(.custom("Avenir Next Demi Bold", size: 34))
+                        .font(.custom("Avenir Next Demi Bold", size: 28))
                     ForEach(weekdayTrends, id: \.day) { point in
                         HStack {
                             Text(point.day)
@@ -1198,25 +1629,30 @@ private struct ReportsView: View {
         }
     }
 
-    private var thisWeekCount: Int {
-        countScrobbles(in: rangeCurrent)
+    private var currentCount: Int {
+        let direct = countScrobbles(in: rangeCurrent)
+        if direct > 0 { return direct }
+        // If local recent history is too shallow, fall back to period top-artist aggregates.
+        return topArtistAggregate(for: period)
     }
 
-    private var lastWeekCount: Int {
-        countScrobbles(in: rangeComparison)
+    private var comparisonCount: Int {
+        let direct = countScrobbles(in: rangeComparison)
+        if direct > 0 { return direct }
+        return 0
     }
 
-    private var thisWeekAvg: Int {
-        thisWeekCount / max(1, period.days)
+    private var currentAvg: Int {
+        currentCount / max(1, period.days)
     }
 
-    private var lastWeekAvg: Int {
-        lastWeekCount / max(1, period.days)
+    private var comparisonAvg: Int {
+        comparisonCount / max(1, period.days)
     }
 
     private var trendPercentString: String {
-        guard lastWeekCount > 0 else { return "New activity trend" }
-        let delta = Double(thisWeekCount - lastWeekCount) / Double(lastWeekCount)
+        guard comparisonCount > 0 else { return "Not enough historical data" }
+        let delta = Double(currentCount - comparisonCount) / Double(comparisonCount)
         let pct = Int((delta * 100).rounded())
         return pct >= 0 ? "+\(pct)%" : "\(pct)%"
     }
@@ -1230,7 +1666,7 @@ private struct ReportsView: View {
 
     private var topTags: [(name: String, count: Int)] {
         var counts: [String: Int] = [:]
-        for artist in scrobbleService.weeklyTopArtists.prefix(12) {
+        for artist in topArtistsForPeriod(period).prefix(12) {
             let name = artist.name.lowercased()
             counts[name, default: 0] += max(1, artist.playcount ?? 0)
         }
@@ -1248,11 +1684,26 @@ private struct ReportsView: View {
     }
 
     private var comparisonTitle: String {
+        period.previousLabel
+    }
+
+    private var periodTitle: String {
+        period.currentLabel
+    }
+
+    private func topArtistsForPeriod(_ period: ReportPeriod) -> [LastfmTopArtist] {
         switch period {
-        case .week: return "last week"
-        case .month: return "last month"
-        case .year: return "last year"
+        case .week:
+            return scrobbleService.weeklyTopArtists
+        case .month:
+            return scrobbleService.monthlyTopArtists
+        case .year:
+            return scrobbleService.yearlyTopArtists
         }
+    }
+
+    private func topArtistAggregate(for period: ReportPeriod) -> Int {
+        topArtistsForPeriod(period).reduce(0) { $0 + max(0, $1.playcount ?? 0) }
     }
 
     private var hourlyCountsCurrent: [Int] {
@@ -1457,6 +1908,22 @@ private enum ReportPeriod: CaseIterable {
         }
     }
 
+    var currentLabel: String {
+        switch self {
+        case .week: return "week"
+        case .month: return "month"
+        case .year: return "year"
+        }
+    }
+
+    var previousLabel: String {
+        switch self {
+        case .week: return "last week"
+        case .month: return "last month"
+        case .year: return "last year"
+        }
+    }
+
     var days: Int {
         switch self {
         case .week: return 7
@@ -1602,23 +2069,25 @@ private struct ClockWedge: Shape {
 
 private struct ChartsView: View {
     @EnvironmentObject private var scrobbleService: ScrobbleService
+    let onOpenTrack: (_ track: String, _ artist: String) -> Void
+    let onOpenArtist: (_ artist: String) -> Void
 
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Charts")
-                    .font(.custom("Avenir Next Demi Bold", size: 30))
+                    .font(.custom("Avenir Next Demi Bold", size: 24))
 
                 if !scrobbleService.weeklyTopArtists.isEmpty {
                     Text("\(scrobbleService.weeklyTopArtists.count) Artists")
-                        .font(.custom("Avenir Next Demi Bold", size: 38))
+                        .font(.custom("Avenir Next Demi Bold", size: 30))
 
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: 16) {
                             ForEach(scrobbleService.weeklyTopArtists.prefix(8)) { artist in
                                 VStack(alignment: .leading, spacing: 6) {
                                     cover(
-                                        artist.imageURL ?? artistImageFallback[artist.name.lowercased()],
+                                        artist.imageURL,
                                         size: 156,
                                         placeholder: artist.name
                                     )
@@ -1630,6 +2099,10 @@ private struct ChartsView: View {
                                         .foregroundStyle(.secondary)
                                 }
                                 .frame(width: 160)
+                                .contentShape(Rectangle())
+                                .onTapGesture {
+                                    onOpenArtist(artist.name)
+                                }
                             }
                         }
                     }
@@ -1637,7 +2110,7 @@ private struct ChartsView: View {
                 }
 
                 Text("\(topAlbums.count) Albums")
-                    .font(.custom("Avenir Next Demi Bold", size: 38))
+                    .font(.custom("Avenir Next Demi Bold", size: 30))
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 16) {
                         ForEach(topAlbums.prefix(8), id: \.id) { album in
@@ -1655,13 +2128,17 @@ private struct ChartsView: View {
                                     .foregroundStyle(.secondary)
                             }
                             .frame(width: 160)
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                onOpenArtist(album.artist)
+                            }
                         }
                     }
                 }
                 .appPanelStyle()
 
                 Text("\(topTracks.count) Tracks")
-                    .font(.custom("Avenir Next Demi Bold", size: 38))
+                    .font(.custom("Avenir Next Demi Bold", size: 30))
                 VStack(spacing: 10) {
                     ForEach(topTracks.prefix(10), id: \.id) { track in
                         HStack(spacing: 10) {
@@ -1680,38 +2157,16 @@ private struct ChartsView: View {
                                 .font(.custom("Avenir Next Medium", size: 16))
                                 .foregroundStyle(.secondary)
                         }
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            onOpenTrack(track.title, track.artist)
+                        }
                     }
                 }
                 .appPanelStyle()
             }
             .padding(24)
         }
-    }
-
-    private var artistImageFallback: [String: String] {
-        var map: [String: String] = [:]
-        for item in scrobbleService.latestScrobbles {
-            guard let image = item.imageURL, !image.isEmpty else { continue }
-            let key = item.artist.lowercased()
-            if map[key] == nil {
-                map[key] = image
-            }
-        }
-        for artist in scrobbleService.weeklyTopArtists + scrobbleService.overallTopArtists {
-            guard let image = artist.imageURL, !image.isEmpty else { continue }
-            let key = artist.name.lowercased()
-            if map[key] == nil {
-                map[key] = image
-            }
-        }
-        for album in topAlbums {
-            guard let image = album.imageURL, !image.isEmpty else { continue }
-            let key = album.artist.lowercased()
-            if map[key] == nil {
-                map[key] = image
-            }
-        }
-        return map
     }
 
     @ViewBuilder
@@ -1821,6 +2276,8 @@ private struct FriendsView: View {
 
     @EnvironmentObject private var scrobbleService: ScrobbleService
     @Binding var query: String
+    let onOpenFriendTrack: (LastfmFriendListening) -> Void
+    let onOpenGraph: (LastfmFriendListening) -> Void
     @State private var activityFilter: ActivityFilter = .hybrid
     private let recentNowPlayingWindow: TimeInterval = 30 * 60
 
@@ -1842,6 +2299,10 @@ private struct FriendsView: View {
                     .appPanelStyle()
 
                 Text(scrobbleService.friendsStatus)
+                    .font(.custom("Avenir Next Medium", size: 12))
+                    .foregroundStyle(.secondary)
+
+                Text("Separation: \(scrobbleService.separationStatus)")
                     .font(.custom("Avenir Next Medium", size: 12))
                     .foregroundStyle(.secondary)
 
@@ -2010,13 +2471,8 @@ private struct FriendsView: View {
                 HStack(spacing: 6) {
                     Text(friend.user)
                         .font(.custom("Avenir Next Medium", size: 13))
-                    if friend.isSubscriber {
-                        Text("Subscriber")
-                            .font(.custom("Avenir Next Medium", size: 10))
-                            .foregroundStyle(.white)
-                            .padding(.horizontal, 6)
-                            .padding(.vertical, 2)
-                            .background(.black, in: Capsule())
+                    if let badge = friendBadgeType(friend) {
+                        badgeView(badge, fontSize: 9, horizontal: 6, vertical: 2)
                     }
                 }
                 Text(friend.country ?? "Unknown location")
@@ -2033,6 +2489,12 @@ private struct FriendsView: View {
                 }
             }
             Spacer()
+            Button {
+                onOpenGraph(friend)
+            } label: {
+                separationChip(for: friend.user)
+            }
+            .buttonStyle(.plain)
             Text(nowPlaying ? "Now" : time(friend.playedAt))
                 .font(.custom("Avenir Next Regular", size: 11))
                 .foregroundStyle(.secondary)
@@ -2040,6 +2502,511 @@ private struct FriendsView: View {
         .padding(.vertical, 2)
         .padding(8)
         .background(nowPlaying ? Color.yellow.opacity(0.24) : Color.clear, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .contentShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        .onTapGesture {
+            onOpenFriendTrack(friend)
+        }
+    }
+
+    private func friendBadgeType(_ friend: LastfmFriendListening) -> String? {
+        if let raw = friend.accountType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !raw.isEmpty, raw != "user" {
+            return raw
+        }
+        return friend.isSubscriber ? "subscriber" : nil
+    }
+
+    private func separationChip(for user: String) -> some View {
+        let lower = user.lowercased()
+        let degree = scrobbleService.separationByUser[lower]
+        let isComputing = scrobbleService.separationStatus.localizedCaseInsensitiveContains("Calculating")
+        let label: String
+        if let degree {
+            label = "\(degree)°"
+        } else if isComputing {
+            label = "..."
+        } else {
+            label = "?"
+        }
+
+        return Text(label)
+            .font(.custom("Avenir Next Demi Bold", size: 10))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+
+    private func badgeView(_ type: String, fontSize: CGFloat, horizontal: CGFloat, vertical: CGFloat) -> some View {
+        let normalized = type.lowercased()
+        let label = normalized == "alum" ? "ALUM" : "LAST.FM PRO"
+        let fill: AnyShapeStyle = normalized == "alum"
+            ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.55, green: 0.14, blue: 1.0), Color(red: 0.70, green: 0.26, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
+            : AnyShapeStyle(Color.black)
+
+        return Text(label)
+            .font(.custom("Avenir Next Demi Bold", size: fontSize))
+            .tracking(0.4)
+            .foregroundStyle(.white)
+            .padding(.horizontal, horizontal)
+            .padding(.vertical, vertical)
+            .background(fill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+}
+
+private struct NeighboursView: View {
+    @EnvironmentObject private var scrobbleService: ScrobbleService
+    @Environment(\.openURL) private var openURL
+    @Binding var query: String
+    let onOpenGraph: (LastfmNeighbour) -> Void
+
+    var body: some View {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 14) {
+                HStack {
+                    Text("Neighbours")
+                        .font(.custom("Avenir Next Demi Bold", size: 28))
+                    Spacer()
+                    Button("Refresh") {
+                        Task { await scrobbleService.refreshNeighbours() }
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+
+                TextField("Filter neighbours", text: $query)
+                    .textFieldStyle(.roundedBorder)
+                    .appPanelStyle()
+
+                Text(scrobbleService.neighboursStatus)
+                    .font(.custom("Avenir Next Medium", size: 12))
+                    .foregroundStyle(.secondary)
+
+                Text("Separation: \(scrobbleService.separationStatus)")
+                    .font(.custom("Avenir Next Medium", size: 12))
+                    .foregroundStyle(.secondary)
+
+                if filteredNeighbours.isEmpty {
+                    Text("No neighbours available.")
+                        .font(.custom("Avenir Next Regular", size: 13))
+                        .foregroundStyle(.secondary)
+                        .appPanelStyle()
+                } else {
+                    Text("Showing \(filteredNeighbours.count) of \(scrobbleService.neighbours.count) neighbours")
+                        .font(.custom("Avenir Next Medium", size: 12))
+                        .foregroundStyle(.secondary)
+
+                    LazyVStack(alignment: .leading, spacing: 8) {
+                        ForEach(filteredNeighbours) { neighbour in
+                            neighbourRow(neighbour)
+                        }
+                    }
+                    .appPanelStyle()
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    private var filteredNeighbours: [LastfmNeighbour] {
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return scrobbleService.neighbours }
+        return scrobbleService.neighbours.filter { item in
+            item.user.localizedCaseInsensitiveContains(trimmed) ||
+            (item.realname?.localizedCaseInsensitiveContains(trimmed) ?? false) ||
+            (item.country?.localizedCaseInsensitiveContains(trimmed) ?? false)
+        }
+    }
+
+    private func neighbourRow(_ neighbour: LastfmNeighbour) -> some View {
+        HStack(spacing: 10) {
+            Button {
+                onOpenGraph(neighbour)
+            } label: {
+                avatar(neighbour.avatarURL)
+            }
+            .buttonStyle(.plain)
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 6) {
+                    Text(neighbour.user)
+                        .font(.custom("Avenir Next Medium", size: 13))
+                    if let badge = badgeType(neighbour) {
+                        badgeView(badge)
+                    }
+                }
+                if let realname = neighbour.realname, !realname.isEmpty {
+                    Text(realname)
+                        .font(.custom("Avenir Next Regular", size: 11))
+                        .foregroundStyle(.secondary)
+                } else if let country = neighbour.country, !country.isEmpty {
+                    Text(country)
+                        .font(.custom("Avenir Next Regular", size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                HStack(spacing: 8) {
+                    Text("Compatibility")
+                        .font(.custom("Avenir Next Medium", size: 11))
+                        .foregroundStyle(.secondary)
+                    Text(matchLabel(neighbour.matchScore))
+                        .font(.custom("Avenir Next Medium", size: 11))
+                }
+                matchBar(neighbour.matchScore)
+            }
+            Spacer()
+            Button {
+                onOpenGraph(neighbour)
+            } label: {
+                separationChip(for: neighbour.user)
+            }
+            .buttonStyle(.plain)
+            Button {
+                if let raw = neighbour.profileURL, let url = URL(string: raw) {
+                    openURL(url)
+                } else if let url = URL(string: "https://www.last.fm/user/\(neighbour.user)") {
+                    openURL(url)
+                }
+            } label: {
+                Image(systemName: "arrow.up.right.square")
+                    .font(.system(size: 13))
+            }
+            .buttonStyle(.plain)
+            .foregroundStyle(.secondary)
+        }
+        .padding(8)
+        .background(Color.white.opacity(0.03), in: RoundedRectangle(cornerRadius: 8, style: .continuous))
+    }
+
+    @ViewBuilder
+    private func avatar(_ urlString: String?) -> some View {
+        if let urlString, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case let .success(image):
+                    image.resizable().scaledToFill()
+                default:
+                    fallbackAvatar()
+                }
+            }
+            .frame(width: 40, height: 40)
+            .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+        } else {
+            fallbackAvatar()
+        }
+    }
+
+    private func fallbackAvatar() -> some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 6, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+            Image(systemName: "person.crop.circle.fill")
+                .foregroundStyle(.secondary)
+        }
+        .frame(width: 40, height: 40)
+    }
+
+    private func matchLabel(_ score: Double?) -> String {
+        guard let score else { return "-" }
+        return "\(Int((score * 100).rounded()))%"
+    }
+
+    private func matchBar(_ score: Double?) -> some View {
+        let ratio = min(1, max(0, score ?? 0))
+        return RoundedRectangle(cornerRadius: 4, style: .continuous)
+            .fill(Color.white.opacity(0.08))
+            .overlay(alignment: .leading) {
+                RoundedRectangle(cornerRadius: 4, style: .continuous)
+                    .fill(Color.cyan.opacity(0.9))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .mask(
+                        GeometryReader { geo in
+                            Rectangle().frame(width: geo.size.width * ratio)
+                        }
+                    )
+            }
+            .frame(height: 8)
+            .frame(width: 180)
+    }
+
+    private func badgeType(_ neighbour: LastfmNeighbour) -> String? {
+        if let raw = neighbour.accountType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !raw.isEmpty, raw != "user" {
+            return raw
+        }
+        return neighbour.isSubscriber ? "subscriber" : nil
+    }
+
+    private func badgeView(_ type: String) -> some View {
+        let normalized = type.lowercased()
+        let label = normalized == "alum" ? "ALUM" : "LAST.FM PRO"
+        let fill: AnyShapeStyle = normalized == "alum"
+            ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.55, green: 0.14, blue: 1.0), Color(red: 0.70, green: 0.26, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
+            : AnyShapeStyle(Color.black)
+        return Text(label)
+            .font(.custom("Avenir Next Demi Bold", size: 9))
+            .foregroundStyle(.white)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(fill, in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+
+    private func separationChip(for user: String) -> some View {
+        let lower = user.lowercased()
+        let degree = scrobbleService.separationByUser[lower]
+        let isComputing = scrobbleService.separationStatus.localizedCaseInsensitiveContains("Calculating")
+        let label: String
+        if let degree {
+            label = "\(degree)°"
+        } else if isComputing {
+            label = "..."
+        } else {
+            label = "?"
+        }
+
+        return Text(label)
+            .font(.custom("Avenir Next Demi Bold", size: 10))
+            .foregroundStyle(.secondary)
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+    }
+}
+
+private struct InteractiveSeparationGraphView: View {
+    let graph: SocialGraphSnapshot
+    let onOpenUser: (String) -> Void
+    private let accent = Color(red: 1.0, green: 0.30, blue: 0.35)
+
+    @State private var zoom: CGFloat = 1
+    @State private var accumulatedZoom: CGFloat = 1
+    @State private var offset: CGSize = .zero
+    @State private var accumulatedOffset: CGSize = .zero
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Separation Network")
+                    .font(.custom("Avenir Next Demi Bold", size: 18))
+                Spacer()
+                Text("Pinch to zoom, drag to pan")
+                    .font(.custom("Avenir Next Medium", size: 11))
+                    .foregroundStyle(.secondary)
+                Button("Reset") {
+                    withAnimation(.easeInOut(duration: 0.18)) {
+                        zoom = 1
+                        accumulatedZoom = 1
+                        offset = .zero
+                        accumulatedOffset = .zero
+                    }
+                }
+                .buttonStyle(.plain)
+                .font(.custom("Avenir Next Medium", size: 11))
+            }
+
+            GeometryReader { geo in
+                let positions = layoutPositions(in: geo.size)
+                ZStack {
+                    ForEach(graph.edges) { edge in
+                        if let from = positions[edge.from], let to = positions[edge.to] {
+                            Path { path in
+                                path.move(to: from)
+                                path.addLine(to: to)
+                            }
+                            .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                        }
+                    }
+
+                    ForEach(graph.nodes) { node in
+                        if let point = positions[node.id] {
+                            Button {
+                                onOpenUser(node.displayName)
+                            } label: {
+                                ZStack {
+                                    Circle()
+                                        .fill(nodeColor(node))
+                                    Circle()
+                                        .stroke(Color.white.opacity(0.24), lineWidth: node.isSource ? 2 : 1)
+                                }
+                                .frame(width: nodeSize(node), height: nodeSize(node))
+                            }
+                            .buttonStyle(.plain)
+                            .position(point)
+
+                            if node.isSource || node.isTarget || node.degree <= 1 {
+                                Text(node.displayName)
+                                    .font(.custom("Avenir Next Medium", size: 10))
+                                    .lineLimit(1)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Color.black.opacity(0.45), in: RoundedRectangle(cornerRadius: 4, style: .continuous))
+                                    .position(x: point.x, y: point.y + 14)
+                            }
+                        }
+                    }
+                }
+                .scaleEffect(zoom)
+                .offset(offset)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .background(Color.black.opacity(0.14), in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .gesture(
+                    DragGesture()
+                        .onChanged { value in
+                            offset = CGSize(
+                                width: accumulatedOffset.width + value.translation.width,
+                                height: accumulatedOffset.height + value.translation.height
+                            )
+                        }
+                        .onEnded { _ in
+                            accumulatedOffset = offset
+                        }
+                )
+                .simultaneousGesture(
+                    MagnificationGesture()
+                        .onChanged { value in
+                            zoom = min(4.0, max(0.55, accumulatedZoom * value))
+                        }
+                        .onEnded { _ in
+                            accumulatedZoom = zoom
+                        }
+                )
+            }
+
+            HStack(spacing: 14) {
+                legendDot(accent, "You")
+                legendDot(.cyan, "Target")
+                legendDot(.white.opacity(0.6), "Intermediate")
+            }
+        }
+    }
+
+    private func layoutPositions(in size: CGSize) -> [String: CGPoint] {
+        guard !graph.nodes.isEmpty else { return [:] }
+        let center = CGPoint(x: size.width / 2, y: size.height / 2)
+        let maxDegree = max(1, graph.nodes.map(\.degree).max() ?? 1)
+        let baseRadius = min(size.width, size.height) * 0.44
+        let ringStep = baseRadius / CGFloat(maxDegree)
+        let groups = Dictionary(grouping: graph.nodes, by: \.degree)
+        var positions: [String: CGPoint] = [:]
+        positions.reserveCapacity(graph.nodes.count)
+
+        for degree in groups.keys.sorted() {
+            guard let nodesAtDegree = groups[degree] else { continue }
+            if degree == 0 {
+                if let source = nodesAtDegree.first {
+                    positions[source.id] = center
+                }
+                continue
+            }
+            let radius = ringStep * CGFloat(degree)
+            let count = nodesAtDegree.count
+            for (idx, node) in nodesAtDegree.enumerated() {
+                let angle = (2 * Double.pi * (Double(idx) / Double(max(1, count)))) - Double.pi / 2
+                let x = center.x + CGFloat(cos(angle)) * radius
+                let y = center.y + CGFloat(sin(angle)) * radius
+                positions[node.id] = CGPoint(x: x, y: y)
+            }
+        }
+        return positions
+    }
+
+    private func nodeColor(_ node: SocialGraphNode) -> Color {
+        if node.isSource { return accent }
+        if node.isTarget { return .cyan }
+        return .white.opacity(0.72)
+    }
+
+    private func nodeSize(_ node: SocialGraphNode) -> CGFloat {
+        if node.isSource { return 12 }
+        if node.isTarget { return 10 }
+        return 8
+    }
+
+    private func legendDot(_ color: Color, _ text: String) -> some View {
+        HStack(spacing: 6) {
+            Circle().fill(color).frame(width: 8, height: 8)
+            Text(text)
+                .font(.custom("Avenir Next Medium", size: 11))
+                .foregroundStyle(.secondary)
+        }
+    }
+}
+
+private struct ProfileWebView: NSViewRepresentable {
+    let url: URL
+
+    func makeNSView(context: Context) -> WKWebView {
+        let webView = WKWebView(frame: .zero)
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.allowsMagnification = true
+        webView.load(URLRequest(url: url))
+        return webView
+    }
+
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        if webView.url != url {
+            webView.load(URLRequest(url: url))
+        }
+    }
+}
+
+private struct AnimatedAvatarImage: NSViewRepresentable {
+    let urls: [URL]
+    let size: CGFloat
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator()
+    }
+
+    func makeNSView(context: Context) -> WKWebView {
+        let config = WKWebViewConfiguration()
+        let webView = WKWebView(frame: .zero, configuration: config)
+        webView.setValue(false, forKey: "drawsBackground")
+        webView.enclosingScrollView?.drawsBackground = false
+        webView.allowsMagnification = false
+        webView.allowsBackForwardNavigationGestures = false
+        return webView
+    }
+
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        context.coordinator.load(urls: urls, into: webView)
+    }
+
+    final class Coordinator {
+        private var lastMarkup: String?
+
+        func load(urls: [URL], into webView: WKWebView) {
+            let candidates = urls.map(\.absoluteString)
+            guard let data = try? JSONSerialization.data(withJSONObject: candidates),
+                  let json = String(data: data, encoding: .utf8) else { return }
+
+            // Use HTML img object-fit cover so avatar is cropped like native cover mode,
+            // while still preserving GIF animation.
+            let markup = """
+            <html>
+              <head>
+                <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                <style>
+                  html,body{margin:0;padding:0;overflow:hidden;background:transparent;width:100%;height:100%;}
+                  #avatar{width:100%;height:100%;object-fit:cover;border-radius:50%;display:block;}
+                </style>
+              </head>
+              <body>
+                <img id="avatar" alt="" />
+                <script>
+                  const urls = \(json);
+                  let i = 0;
+                  const img = document.getElementById('avatar');
+                  function next() {
+                    if (i >= urls.length) return;
+                    img.src = urls[i++];
+                  }
+                  img.onerror = next;
+                  next();
+                </script>
+              </body>
+            </html>
+            """
+
+            guard markup != lastMarkup else { return }
+            lastMarkup = markup
+            webView.loadHTMLString(markup, baseURL: nil)
+        }
     }
 }
 

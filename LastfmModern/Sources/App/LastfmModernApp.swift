@@ -1,15 +1,23 @@
 import SwiftUI
+import AppKit
 
 @main
 struct LastfmModernApp: App {
     @StateObject private var scrobbleService = ScrobbleService()
     @Environment(\.openWindow) private var openWindow
+    @AppStorage("ui.showDockIcon") private var showDockIcon = true
 
     var body: some Scene {
-        WindowGroup("LastfmModern") {
+        WindowGroup("Last.fm modern", id: "main") {
             ContentView()
                 .environmentObject(scrobbleService)
                 .frame(minWidth: 760, minHeight: 560)
+                .onAppear {
+                    applyDockIconVisibility()
+                }
+                .onChange(of: showDockIcon) { _ in
+                    applyDockIconVisibility()
+                }
         }
         .defaultSize(width: 1180, height: 760)
         .commands {
@@ -18,6 +26,13 @@ struct LastfmModernApp: App {
                     openWindow(id: "diagnostics")
                 }
                 .keyboardShortcut("d", modifiers: [.command, .option])
+
+                Divider()
+
+                Button(showDockIcon ? "Switch To Menu Bar Only" : "Show Dock Icon") {
+                    toggleDockIconVisibility()
+                }
+                .keyboardShortcut("m", modifiers: [.command, .option])
             }
         }
 
@@ -30,6 +45,17 @@ struct LastfmModernApp: App {
 
         MenuBarExtra("Last.fm", systemImage: "music.note") {
             VStack(alignment: .leading, spacing: 10) {
+                Button(showDockIcon ? "Switch to Menu Bar only" : "Show Dock icon") {
+                    toggleDockIconVisibility()
+                }
+
+                Button("Open Last.fm modern") {
+                    openWindow(id: "main")
+                    NSApp.activate(ignoringOtherApps: true)
+                }
+
+                Divider()
+
                 Toggle("Enable scrobbling", isOn: Binding(
                     get: { scrobbleService.scrobblingEnabled },
                     set: { enabled in
@@ -48,6 +74,19 @@ struct LastfmModernApp: App {
                 .environmentObject(scrobbleService)
                 .frame(width: 480, height: 280)
         }
+    }
+
+    private func toggleDockIconVisibility() {
+        showDockIcon.toggle()
+        applyDockIconVisibility()
+    }
+
+    private func applyDockIconVisibility() {
+        // `.regular` shows Dock icon + app switcher presence.
+        // `.accessory` keeps the app alive as menu-bar-focused without Dock icon.
+        let targetPolicy: NSApplication.ActivationPolicy = showDockIcon ? .regular : .accessory
+        guard NSApp.activationPolicy() != targetPolicy else { return }
+        NSApp.setActivationPolicy(targetPolicy)
     }
 }
 

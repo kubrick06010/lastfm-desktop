@@ -1,5 +1,26 @@
 import Foundation
 
+struct SocialGraphNode: Identifiable, Equatable {
+    let id: String
+    let displayName: String
+    let degree: Int
+    let isTarget: Bool
+    let isSource: Bool
+}
+
+struct SocialGraphEdge: Identifiable, Equatable {
+    let id: String
+    let from: String
+    let to: String
+}
+
+struct SocialGraphSnapshot: Equatable {
+    let sourceUser: String
+    let nodes: [SocialGraphNode]
+    let edges: [SocialGraphEdge]
+    let generatedAt: Date
+}
+
 @MainActor
 final class ScrobbleService: ObservableObject {
     @Published private(set) var currentTrack: Track?
@@ -15,6 +36,7 @@ final class ScrobbleService: ObservableObject {
     @Published private(set) var lastSubmittedAt: Date?
     @Published private(set) var queueFilePath = ""
     @Published private(set) var sessionStatus = "Not authenticated"
+    @Published private(set) var sessionUsername: String?
     @Published private(set) var capabilitiesStatus = "Unknown"
     @Published private(set) var validationSource = "Live"
     @Published private(set) var lastRecoveryHint: String?
@@ -36,6 +58,10 @@ final class ScrobbleService: ObservableObject {
     @Published private(set) var profile: LastfmUserProfile?
     @Published private(set) var latestScrobbles: [LastfmRecentScrobble] = []
     @Published private(set) var friendsListening: [LastfmFriendListening] = []
+    @Published private(set) var neighbours: [LastfmNeighbour] = []
+    @Published private(set) var separationByUser: [String: Int] = [:]
+    @Published private(set) var separationStatus = "Not calculated"
+    @Published private(set) var socialGraph: SocialGraphSnapshot?
     @Published private(set) var weeklyTopArtists: [LastfmTopArtist] = []
     @Published private(set) var monthlyTopArtists: [LastfmTopArtist] = []
     @Published private(set) var yearlyTopArtists: [LastfmTopArtist] = []
@@ -48,6 +74,7 @@ final class ScrobbleService: ObservableObject {
     @Published private(set) var profileStatus = "Not loaded"
     @Published private(set) var scrobblesStatus = "Not loaded"
     @Published private(set) var friendsStatus = "Not loaded"
+    @Published private(set) var neighboursStatus = "Not loaded"
 
     private var api: LastfmAPI
     private let monitor: PlayerMonitor
@@ -63,10 +90,14 @@ final class ScrobbleService: ObservableObject {
     private var exploreTask: Task<Void, Never>?
     private var profileTask: Task<Void, Never>?
     private var friendsRefreshTask: Task<Void, Never>?
+    private var separationTask: Task<Void, Never>?
     private var hasQueuedCurrentTrack = false
     private var hasSentNowPlayingForCurrentTrack = false
     private var recentScrobbles: [String: Date] = [:]
+    private var friendGraphCache: [String: [String]] = [:]
     private let inferredNowPlayingWindow: TimeInterval = 30 * 60
+    private let quickSeparationDepth = 6
+    private let detailedSeparationDepth = 24
     private let retryJitter: () -> Double
     private let sleepFunction: @Sendable (UInt64) async -> Void
 
@@ -103,6 +134,7 @@ final class ScrobbleService: ObservableObject {
             self.api.restoreSession(session)
         }
         self.isAuthenticated = self.api.isAuthenticated
+        self.sessionUsername = self.api.sessionUsername
         self.sessionStatus = self.isAuthenticated ? "Authenticated (not yet validated)" : "Not authenticated"
 
         self.monitor.onEvent = { [weak self] event in
@@ -118,6 +150,7 @@ final class ScrobbleService: ObservableObject {
                 await refreshProfileData()
                 await refreshScrobblesData()
                 await refreshFriendsData()
+                await refreshNeighboursData()
                 startFriendsAutoRefresh()
             }
         }
@@ -135,6 +168,7 @@ final class ScrobbleService: ObservableObject {
         exploreTask?.cancel()
         profileTask?.cancel()
         friendsRefreshTask?.cancel()
+        separationTask?.cancel()
         monitor.stop()
     }
 
@@ -158,11 +192,17 @@ final class ScrobbleService: ObservableObject {
             let session = try await api.authenticate(username: username, password: password)
             sessionStore.save(session)
             isAuthenticated = api.isAuthenticated
+            sessionUsername = session.name
+            friendGraphCache = [:]
+            separationByUser = [:]
+            separationStatus = "Not calculated"
+            socialGraph = nil
             scheduleRetryIfNeeded()
             await validateSessionOnStartup()
             await refreshProfileData()
             await refreshScrobblesData()
             await refreshFriendsData()
+            await refreshNeighboursData()
             startFriendsAutoRefresh()
         } catch {
             handle(error: error)
@@ -174,6 +214,7 @@ final class ScrobbleService: ObservableObject {
         api.clearSession()
         sessionStore.clear()
         isAuthenticated = false
+        sessionUsername = nil
         authError = nil
         sessionStatus = "Not authenticated"
         capabilitiesStatus = "Unknown"
@@ -195,6 +236,14 @@ final class ScrobbleService: ObservableObject {
         isSubscriber = false
         friendsListening = []
         friendsStatus = "Not loaded"
+        neighbours = []
+        neighboursStatus = "Not loaded"
+        separationByUser = [:]
+        separationStatus = "Not calculated"
+        socialGraph = nil
+        separationTask?.cancel()
+        separationTask = nil
+        friendGraphCache = [:]
         friendsRefreshTask?.cancel()
         friendsRefreshTask = nil
         cancelRetrySchedule()
@@ -220,6 +269,75 @@ final class ScrobbleService: ObservableObject {
 
     func refreshFriends() async {
         await refreshFriendsData()
+    }
+
+    func refreshNeighbours() async {
+        await refreshNeighboursData()
+    }
+
+    func prepareSocialGraph(for targetUser: String) async {
+        let target = targetUser.trimmingCharacters(in: .whitespacesAndNewlines)
+        separationTask?.cancel()
+        socialGraph = nil
+        guard !target.isEmpty else {
+            separationStatus = "No target user selected"
+            socialGraph = nil
+            return
+        }
+        guard isAuthenticated else {
+            separationStatus = "Sign in to calculate separation"
+            socialGraph = nil
+            return
+        }
+        guard let source = api.sessionUsername?.trimmingCharacters(in: .whitespacesAndNewlines), !source.isEmpty else {
+            separationStatus = "No source user available"
+            socialGraph = nil
+            return
+        }
+
+        let targetLower = target.lowercased()
+        let sourceLower = source.lowercased()
+        if targetLower == sourceLower {
+            separationByUser[targetLower] = 0
+            separationStatus = "You are 0° away from \(target)"
+            socialGraph = SocialGraphSnapshot(
+                sourceUser: source,
+                nodes: [
+                    SocialGraphNode(
+                        id: sourceLower,
+                        displayName: source,
+                        degree: 0,
+                        isTarget: true,
+                        isSource: true
+                    )
+                ],
+                edges: [],
+                generatedAt: Date()
+            )
+            return
+        }
+
+        separationStatus = "Calculating path to \(target)..."
+        let results = await bfsDegrees(
+            from: source,
+            targets: [target],
+            maxDepth: detailedSeparationDepth,
+            includeContext: false
+        )
+        guard !Task.isCancelled else { return }
+        socialGraph = results.graph
+
+        if let degree = results.degrees[targetLower] {
+            separationByUser[targetLower] = degree
+            separationStatus = "Found a \(degree)° path to \(target)"
+        } else {
+            separationByUser[targetLower] = nil
+            separationStatus = "No path found within \(detailedSeparationDepth)° for \(target)"
+        }
+    }
+
+    func separationDegree(for user: String) -> Int? {
+        separationByUser[user.lowercased()]
     }
 
     func inspect(track: String, artist: String) async {
@@ -252,32 +370,42 @@ final class ScrobbleService: ObservableObject {
 
         var loadedAnything = false
         var degraded = false
+        let isArtistOnlyInspection =
+            scrobble.id.hasPrefix("deep-") &&
+            scrobble.track.trimmingCharacters(in: .whitespacesAndNewlines)
+                .caseInsensitiveCompare(scrobble.artist.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
 
-        do {
-            inspectedTrackDetails = try await api.fetchTrackDetails(artist: scrobble.artist, track: scrobble.track)
-            loadedAnything = true
-        } catch is CancellationError {
-            return
-        } catch {
-            inspectedTrackDetails = LastfmTrackDetails(
-                name: scrobble.track,
-                artist: scrobble.artist,
-                album: scrobble.album,
-                imageURL: scrobble.imageURL,
-                listeners: nil,
-                playcount: nil,
-                userPlaycount: nil,
-                url: scrobble.url,
-                summary: "Detailed track metadata is temporarily unavailable.",
-                tags: []
-            )
-            loadedAnything = true
-            degraded = true
-            handle(error: error)
+        if !isArtistOnlyInspection {
+            do {
+                inspectedTrackDetails = try await fetchWithRetry {
+                    try await self.api.fetchTrackDetails(artist: scrobble.artist, track: scrobble.track)
+                }
+                loadedAnything = true
+            } catch is CancellationError {
+                return
+            } catch {
+                inspectedTrackDetails = LastfmTrackDetails(
+                    name: scrobble.track,
+                    artist: scrobble.artist,
+                    album: scrobble.album,
+                    imageURL: scrobble.imageURL,
+                    listeners: nil,
+                    playcount: nil,
+                    userPlaycount: nil,
+                    url: scrobble.url,
+                    summary: "Detailed track metadata is temporarily unavailable.",
+                    tags: []
+                )
+                loadedAnything = true
+                degraded = true
+                handle(error: error)
+            }
         }
 
         do {
-            inspectedArtistDetails = try await api.fetchArtistDetails(artist: scrobble.artist)
+            inspectedArtistDetails = try await fetchWithRetry {
+                try await self.api.fetchArtistDetails(artist: scrobble.artist)
+            }
             loadedAnything = true
         } catch is CancellationError {
             return
@@ -303,6 +431,40 @@ final class ScrobbleService: ObservableObject {
         } else {
             inspectStatus = "Failed to load detail"
         }
+    }
+
+    private func fetchWithRetry<T>(_ work: @escaping () async throws -> T) async throws -> T {
+        do {
+            return try await work()
+        } catch is CancellationError {
+            throw CancellationError()
+        } catch {
+            guard shouldRetryInspection(error) else {
+                throw error
+            }
+            await sleepFunction(550_000_000)
+            return try await work()
+        }
+    }
+
+    private func shouldRetryInspection(_ error: Error) -> Bool {
+        if let apiError = error as? LastfmAPIError {
+            switch apiError {
+            case .networkUnavailable, .transport, .rateLimited:
+                return true
+            default:
+                return false
+            }
+        }
+        if let urlError = error as? URLError {
+            switch urlError.code {
+            case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost:
+                return true
+            default:
+                return false
+            }
+        }
+        return false
     }
 
     func clearInspection() {
@@ -769,7 +931,7 @@ final class ScrobbleService: ObservableObject {
         lastRecoveryHint = nil
 
         do {
-            latestScrobbles = try await api.fetchRecentScrobbles(limit: 50)
+            latestScrobbles = try await api.fetchRecentScrobbles(limit: 1000)
             scrobblesStatus = "Loaded"
         } catch is CancellationError {
             return
@@ -799,6 +961,7 @@ final class ScrobbleService: ObservableObject {
                     realname: friend.realname,
                     country: friend.country,
                     isSubscriber: friend.isSubscriber,
+                    accountType: friend.accountType,
                     avatarURL: friend.avatarURL,
                     track: friend.track,
                     artist: friend.artist,
@@ -816,12 +979,272 @@ final class ScrobbleService: ObservableObject {
             }
             let nowCount = friendsListening.filter { inferredNowPlayingState(for: $0) }.count
             friendsStatus = "Loaded \(friendsListening.count) friends (\(nowCount) listening now)"
+            scheduleSeparationRefresh()
         } catch is CancellationError {
             return
         } catch {
             handle(error: error)
             friendsStatus = "Failed to load friends"
         }
+    }
+
+    private func refreshNeighboursData() async {
+        guard isAuthenticated else {
+            neighboursStatus = "Sign in to load neighbours"
+            neighbours = []
+            return
+        }
+        neighboursStatus = "Loading neighbours..."
+        lastAPIError = nil
+        lastRecoveryHint = nil
+
+        do {
+            neighbours = try await api.fetchNeighbours(limit: 500)
+            neighboursStatus = "Loaded \(neighbours.count) neighbours"
+            scheduleSeparationRefresh()
+        } catch is CancellationError {
+            return
+        } catch let LastfmAPIError.api(code, message)
+            where code == 3 && message.localizedCaseInsensitiveContains("invalid method") {
+            if friendsListening.isEmpty {
+                await refreshFriendsData()
+            }
+            neighbours = fallbackNeighboursFromFriends(limit: 500)
+            neighboursStatus = "Neighbours API unavailable; showing \(neighbours.count) friends as neighbours"
+            scheduleSeparationRefresh()
+        } catch {
+            handle(error: error)
+            neighboursStatus = "Failed to load neighbours"
+        }
+    }
+
+    private func fallbackNeighboursFromFriends(limit: Int) -> [LastfmNeighbour] {
+        let capped = min(max(1, limit), 1000)
+        var seen: Set<String> = []
+        var output: [LastfmNeighbour] = []
+        output.reserveCapacity(min(capped, friendsListening.count))
+
+        let sorted = friendsListening.sorted {
+            if $0.nowPlaying != $1.nowPlaying {
+                return $0.nowPlaying && !$1.nowPlaying
+            }
+            let lhs = $0.playedAt ?? .distantPast
+            let rhs = $1.playedAt ?? .distantPast
+            if lhs != rhs {
+                return lhs > rhs
+            }
+            return $0.user.localizedCaseInsensitiveCompare($1.user) == .orderedAscending
+        }
+
+        for friend in sorted {
+            let trimmedUser = friend.user.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmedUser.isEmpty else { continue }
+            let key = trimmedUser.lowercased()
+            guard !seen.contains(key) else { continue }
+            seen.insert(key)
+            output.append(
+                LastfmNeighbour(
+                    id: "friend-\(key)",
+                    user: trimmedUser,
+                    realname: friend.realname,
+                    country: friend.country,
+                    isSubscriber: friend.isSubscriber,
+                    accountType: friend.accountType,
+                    avatarURL: friend.avatarURL,
+                    profileURL: "https://www.last.fm/user/\(trimmedUser)",
+                    matchScore: nil
+                )
+            )
+            if output.count >= capped {
+                break
+            }
+        }
+        return output
+    }
+
+    private func scheduleSeparationRefresh() {
+        separationTask?.cancel()
+        separationTask = Task { @MainActor in
+            await refreshSeparationDegrees()
+        }
+    }
+
+    private func refreshSeparationDegrees() async {
+        guard isAuthenticated else {
+            separationByUser = [:]
+            separationStatus = "Sign in to calculate separation"
+            return
+        }
+        guard let source = api.sessionUsername?.trimmingCharacters(in: .whitespacesAndNewlines), !source.isEmpty else {
+            separationByUser = [:]
+            separationStatus = "No source user available"
+            return
+        }
+
+        let targetUsers = visibleTargetUsers(source: source)
+        guard !targetUsers.isEmpty else {
+            separationByUser = [:]
+            separationStatus = "No users to compare"
+            return
+        }
+
+        separationStatus = "Calculating separation paths..."
+        let results = await bfsDegrees(from: source, targets: targetUsers, maxDepth: quickSeparationDepth, includeContext: true)
+        guard !Task.isCancelled else { return }
+        separationByUser = results.degrees
+        let found = results.degrees.count
+        separationStatus = "Found paths for \(found)/\(targetUsers.count) users"
+    }
+
+    private func visibleTargetUsers(source: String) -> [String] {
+        let sourceLower = source.lowercased()
+        var seen: Set<String> = []
+        var targets: [String] = []
+
+        for user in friendsListening.map(\.user) + neighbours.map(\.user) {
+            let trimmed = user.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { continue }
+            let lower = trimmed.lowercased()
+            guard lower != sourceLower else { continue }
+            guard !seen.contains(lower) else { continue }
+            seen.insert(lower)
+            targets.append(trimmed)
+            if targets.count >= 80 { break }
+        }
+        return targets
+    }
+
+    private func bfsDegrees(
+        from source: String,
+        targets: [String],
+        maxDepth: Int,
+        includeContext: Bool
+    ) async -> (degrees: [String: Int], graph: SocialGraphSnapshot?) {
+        var targetMap: [String: String] = [:]
+        for item in targets {
+            targetMap[item.lowercased()] = item
+        }
+        var pending = Set(targetMap.keys)
+        let sourceLower = source.lowercased()
+        var visited: Set<String> = [sourceLower]
+        var queue: [(user: String, depth: Int)] = [(source, 0)]
+        var found: [String: Int] = [:]
+        var parentByUser: [String: String] = [:]
+        var depthByUser: [String: Int] = [sourceLower: 0]
+        var displayByUser: [String: String] = [sourceLower: source]
+        let maxExploredNodes = includeContext ? 1200 : min(10_000, max(2_000, maxDepth * 500))
+
+        while !queue.isEmpty && !pending.isEmpty {
+            guard !Task.isCancelled else { break }
+            let current = queue.removeFirst()
+            if current.depth >= maxDepth { continue }
+            if visited.count > maxExploredNodes { break }
+
+            let neighbors = await friendsOf(user: current.user)
+            for neighbor in neighbors {
+                let lower = neighbor.lowercased()
+                guard !visited.contains(lower) else { continue }
+                visited.insert(lower)
+                let nextDepth = current.depth + 1
+                queue.append((neighbor, nextDepth))
+                parentByUser[lower] = current.user.lowercased()
+                depthByUser[lower] = nextDepth
+                displayByUser[lower] = neighbor
+                if pending.contains(lower) {
+                    if let original = targetMap[lower] {
+                        found[original.lowercased()] = nextDepth
+                    }
+                    pending.remove(lower)
+                }
+            }
+        }
+        let graph = makeSocialGraph(
+            source: source,
+            targetLowerSet: Set(targetMap.keys),
+            parentByUser: parentByUser,
+            depthByUser: depthByUser,
+            displayByUser: displayByUser,
+            includeContext: includeContext
+        )
+        return (found, graph)
+    }
+
+    private func friendsOf(user: String) async -> [String] {
+        let key = user.lowercased()
+        if let cached = friendGraphCache[key] {
+            return cached
+        }
+        do {
+            let fetched = try await api.fetchFriendUsernames(user: user, limit: 120)
+            friendGraphCache[key] = fetched
+            return fetched
+        } catch {
+            return []
+        }
+    }
+
+    private func makeSocialGraph(
+        source: String,
+        targetLowerSet: Set<String>,
+        parentByUser: [String: String],
+        depthByUser: [String: Int],
+        displayByUser: [String: String],
+        includeContext: Bool
+    ) -> SocialGraphSnapshot? {
+        let sourceLower = source.lowercased()
+        guard !depthByUser.isEmpty else { return nil }
+
+        var selected: Set<String> = [sourceLower]
+        for target in targetLowerSet where depthByUser[target] != nil {
+            var cursor: String? = target
+            while let current = cursor {
+                if selected.contains(current) { break }
+                selected.insert(current)
+                cursor = parentByUser[current]
+            }
+        }
+
+        let remainingCapacity = max(0, 220 - selected.count)
+        if includeContext, remainingCapacity > 0 {
+            let extras = depthByUser
+                .sorted { lhs, rhs in
+                    if lhs.value != rhs.value { return lhs.value < rhs.value }
+                    return lhs.key < rhs.key
+                }
+                .map(\.key)
+                .filter { !selected.contains($0) }
+            for key in extras.prefix(remainingCapacity) {
+                selected.insert(key)
+            }
+        }
+
+        let nodes = selected.compactMap { lower -> SocialGraphNode? in
+            guard let degree = depthByUser[lower] else { return nil }
+            let display = displayByUser[lower] ?? lower
+            return SocialGraphNode(
+                id: lower,
+                displayName: display,
+                degree: degree,
+                isTarget: targetLowerSet.contains(lower),
+                isSource: lower == sourceLower
+            )
+        }
+        .sorted {
+            if $0.degree != $1.degree { return $0.degree < $1.degree }
+            return $0.displayName.localizedCaseInsensitiveCompare($1.displayName) == .orderedAscending
+        }
+
+        let edges = selected.compactMap { child -> SocialGraphEdge? in
+            guard let parent = parentByUser[child], selected.contains(parent) else { return nil }
+            return SocialGraphEdge(id: "\(parent)->\(child)", from: parent, to: child)
+        }
+
+        return SocialGraphSnapshot(
+            sourceUser: source,
+            nodes: nodes,
+            edges: edges,
+            generatedAt: Date()
+        )
     }
 
     private func isLikelyNowPlaying(playedAt: Date?) -> Bool {
