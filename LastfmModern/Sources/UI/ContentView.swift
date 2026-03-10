@@ -60,6 +60,7 @@ struct ContentView: View {
     @State private var deepLinkTarget: DeepLinkTarget?
     @State private var socialGraphTarget: SocialGraphTarget?
     @State private var selectedProfileURL: URL?
+    @State private var isDiagnosticsPresented = false
 
     var body: some View {
         NavigationSplitView {
@@ -269,6 +270,14 @@ struct ContentView: View {
                     ))
                 }
             }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: AppEvents.showDiagnostics)) { _ in
+            isDiagnosticsPresented = true
+        }
+        .sheet(isPresented: $isDiagnosticsPresented) {
+            DiagnosticsView()
+                .environmentObject(scrobbleService)
+                .frame(minWidth: 680, minHeight: 520)
         }
     }
 

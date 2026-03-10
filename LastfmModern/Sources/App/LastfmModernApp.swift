@@ -1,6 +1,10 @@
 import SwiftUI
 import AppKit
 
+enum AppEvents {
+    static let showDiagnostics = Notification.Name("fm.lastfmmodern.showDiagnostics")
+}
+
 @main
 struct LastfmModernApp: App {
     @StateObject private var scrobbleService = ScrobbleService()
@@ -8,7 +12,7 @@ struct LastfmModernApp: App {
     @AppStorage("ui.showDockIcon") private var showDockIcon = true
 
     var body: some Scene {
-        WindowGroup("Last.fm modern", id: "main") {
+        Window("Last.fm modern", id: "main") {
             ContentView()
                 .environmentObject(scrobbleService)
                 .frame(minWidth: 760, minHeight: 560)
@@ -23,7 +27,7 @@ struct LastfmModernApp: App {
         .commands {
             CommandMenu("Tools") {
                 Button("Diagnostics") {
-                    openWindow(id: "diagnostics")
+                    showDiagnosticsInMainWindow()
                 }
                 .keyboardShortcut("d", modifiers: [.command, .option])
 
@@ -36,13 +40,6 @@ struct LastfmModernApp: App {
             }
         }
 
-        Window("Diagnostics", id: "diagnostics") {
-            DiagnosticsView()
-                .environmentObject(scrobbleService)
-                .frame(minWidth: 580, minHeight: 460)
-        }
-        .defaultSize(width: 720, height: 560)
-
         MenuBarExtra("Last.fm", systemImage: "music.note") {
             VStack(alignment: .leading, spacing: 10) {
                 Button(showDockIcon ? "Switch to Menu Bar only" : "Show Dock icon") {
@@ -52,6 +49,10 @@ struct LastfmModernApp: App {
                 Button("Open Last.fm modern") {
                     openWindow(id: "main")
                     NSApp.activate(ignoringOtherApps: true)
+                }
+
+                Button("Diagnostics") {
+                    showDiagnosticsInMainWindow()
                 }
 
                 Divider()
@@ -88,9 +89,17 @@ struct LastfmModernApp: App {
         guard NSApp.activationPolicy() != targetPolicy else { return }
         NSApp.setActivationPolicy(targetPolicy)
     }
+
+    private func showDiagnosticsInMainWindow() {
+        openWindow(id: "main")
+        NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            NotificationCenter.default.post(name: AppEvents.showDiagnostics, object: nil)
+        }
+    }
 }
 
-private struct DiagnosticsView: View {
+struct DiagnosticsView: View {
     @EnvironmentObject private var scrobbleService: ScrobbleService
 
     var body: some View {

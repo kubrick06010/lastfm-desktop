@@ -4,6 +4,7 @@ This repository now contains:
 
 1. The legacy Qt desktop client (historical codebase).
 2. `LastfmModern`, a modern macOS SwiftUI client focused on Last.fm scrobbling workflows.
+   - Uses a single main-window model (plus menu bar controls) for lower overhead.
 
 ## Active target: `LastfmModern` (macOS)
 
@@ -12,27 +13,27 @@ Use this for current development.
 - Project: `LastfmModern/LastfmModern.xcodeproj`
 - Platform: macOS (Xcode)
 - Runtime mode:
-  - Live Last.fm API mode when credentials are provided.
-  - Stub mode when credentials are missing.
+  - Live Last.fm API mode with built-in app credentials (default end-user flow).
+  - Optional developer override via environment variables.
 
 See full app documentation in [LastfmModern/README.md](/Users/haa/Desktop/projects/lastfm-desktop/LastfmModern/README.md).
 
 ## Quick start (macOS)
 
-1. Export your Last.fm API credentials in your shell:
+1. Open and run from Xcode:
+
+```bash
+open LastfmModern/LastfmModern.xcodeproj
+```
+
+2. Optional (development override only): set custom API credentials in your shell:
 
 ```bash
 export LASTFM_API_KEY="your_api_key"
 export LASTFM_SHARED_SECRET="your_shared_secret"
 ```
 
-2. Open and run from Xcode:
-
-```bash
-open LastfmModern/LastfmModern.xcodeproj
-```
-
-3. Or run tests from terminal:
+3. Run tests from terminal:
 
 ```bash
 xcodebuild \
