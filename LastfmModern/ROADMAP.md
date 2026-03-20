@@ -7,8 +7,8 @@
 
 ## Current Baseline
 - Legacy app remains the behavior reference in `app/client`, `lib/listener`, and `lib/unicorn`.
-- `liblastfm` is now integrated as a submodule for protocol/behavior reference.
-- New SwiftUI app scaffold exists in `LastfmModern/`.
+- `liblastfm` may be checked out locally for protocol/behavior reference, but is not part of the tracked repo.
+- `LastfmModern/` is the active product and ships as a native macOS SwiftUI app.
 
 ## Scope Priorities
 1. Authentication/session management.
@@ -25,7 +25,8 @@
   - `LastfmAPI` (auth + now playing + scrobble).
   - `PlayerMonitor` (Apple Music/Spotify/system listeners via adapters).
   - `ScrobbleService` orchestration + business rules.
-  - `SessionStore` persistence (Keychain for session key, user defaults for metadata).
+  - `LastfmAccountsStore` persistence for multi-account session management.
+  - `ProxySettingsStore` and launch-at-login controller for app shell behavior.
 
 ## Feature Mapping (Legacy -> Modern)
 - `Application` / tray menu -> SwiftUI `MenuBarExtra` + command actions.
@@ -35,35 +36,46 @@
 - Preferences dialogs -> SwiftUI settings scene.
 
 ## Milestones
-1. Foundation (Done/In Progress)
+1. Foundation (Done)
 - Project scaffolded and building.
-- `liblastfm` integrated as submodule.
-- Initial service skeleton and basic UI created.
+- Initial service skeleton and native macOS shell created.
+- Single-window architecture established for lower overhead.
 
-2. API + Session (In Progress)
-- Implement Last.fm auth (`auth.getMobileSession`).
-- Implement `track.updateNowPlaying` and `track.scrobble`.
-- Persist session and expose login state in UI.
+2. API + Session (Done)
+- Last.fm auth (`auth.getMobileSession`) implemented.
+- `track.updateNowPlaying` and `track.scrobble` implemented.
+- Multi-account persistence and login state implemented in UI.
 
-3. Real Player Input
-- Implement Apple Music and Spotify listeners.
-- Normalize metadata to `Track` model.
-- Validate transition handling (start/pause/resume/stop).
+3. Real Player Input (Done / Targeted expansion pending)
+- Apple Music, iTunes, and Spotify listeners implemented.
+- Metadata normalized to `Track`.
+- Transition handling validated for start/pause/resume/stop.
+- VLC support researched and technically scoped; implementation still pending.
 
-4. Reliable Scrobbling
-- Scrobble thresholds/rules parity with legacy behavior.
-- Local queue persistence and retry policy.
-- Connection recovery and background submission.
+4. Reliable Scrobbling (Done)
+- Scrobble thresholds/rules parity implemented.
+- Local queue persistence and retry policy implemented.
+- Connection recovery and background submission implemented.
+- Diagnostics and queue retry controls implemented in-app.
 
-5. UX Parity + Modernization
-- Main window parity for now playing/scrobbles/profile basics.
-- Settings and account management.
-- Native notifications and polished menu bar flow.
+5. UX Parity + Modernization (In Progress)
+- Main window parity for dashboard/scrobbles/profile/friends/charts implemented.
+- Settings reworked into a sectioned preferences window.
+- Account management, proxy controls, launch at login, and menu bar workflow implemented.
+- Adaptive inspector resizing and mood-reactive dashboard visuals implemented.
+- Remaining work:
+  - broader responsive pass across all tabs
+  - VLC integration
+  - optional fingerprinting reintroduction
+  - tighter visual QA for light mode and ultra-wide layouts
 
-6. Hardening + Release
-- Unit/integration tests for API/signature/session/scrobble queue.
-- Logging/diagnostics screen.
-- Packaging/signing/notarization pipeline.
+6. Hardening + Release (In Progress)
+- Logging/diagnostics screen implemented.
+- Ongoing release packaging via GitHub releases.
+- Remaining work:
+  - stronger automated test coverage for queue/session/networking
+  - signing/notarization pipeline
+  - enterprise polish (proxy credential storage, deployment guidance)
 
 ## Risks and Mitigations
 - Player integration differences across macOS versions:
@@ -78,3 +90,4 @@
 - App can send now playing updates for detected tracks.
 - App can queue and submit scrobbles with visible status.
 - Session survives app restart.
+- Preferences cover the operational essentials: accounts, proxy, startup behavior, advanced controls.

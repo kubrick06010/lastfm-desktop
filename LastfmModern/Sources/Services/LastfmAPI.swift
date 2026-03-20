@@ -1,4 +1,5 @@
 import Foundation
+import CFNetwork
 import CryptoKit
 
 enum LastfmSignature {
@@ -149,6 +150,11 @@ struct LastfmArtistDetails: Equatable {
     let similarArtists: [LastfmSimilarArtist]
 }
 
+private struct ArtistImageSupplement {
+    let imageURL: String?
+    let similarArtistImages: [String: String]
+}
+
 struct LastfmUserProfile: Equatable {
     let name: String
     let realname: String?
@@ -276,14 +282,14 @@ final class LastfmAPIClient: LastfmAPI {
     var sessionUsername: String? { session?.name }
 
     private let config: LastfmAPIConfig
-    private let urlSession: URLSession
+    private let sessionProvider: () -> URLSession
     private var session: LastfmSession?
     private var endpointCache: [String: EndpointCacheEntry] = [:]
     private let endpointCacheLock = NSLock()
 
-    init(config: LastfmAPIConfig, urlSession: URLSession = .shared) {
+    init(config: LastfmAPIConfig, sessionProvider: @escaping () -> URLSession = { .shared }) {
         self.config = config
-        self.urlSession = urlSession
+        self.sessionProvider = sessionProvider
     }
 
     func authenticate(username: String, password: String) async throws -> LastfmSession {
@@ -416,7 +422,13 @@ final class LastfmAPIClient: LastfmAPI {
 
         let payload: [String: Any]
         do {
-            payload = try await send(params: &params, cachePolicy: .ttl(seconds: 900, staleFallbackSeconds: 86_400)).payload
+            // Prefer the public read endpoint for metadata. It consistently returns
+            // stats/artwork for read-only methods and avoids needless dependence on
+            // the signed POST session path.
+            payload = try await sendPublicRead(
+                params: params,
+                cachePolicy: .ttl(seconds: 900, staleFallbackSeconds: 86_400)
+            ).payload
         } catch let LastfmAPIError.api(code, _) where code == 6 {
             return LastfmTrackDetails(
                 name: track,
@@ -431,10 +443,9 @@ final class LastfmAPIClient: LastfmAPI {
                 tags: []
             )
         } catch {
-            // Read-only metadata endpoints can fail under signed POST in some
-            // edge cases. Retry via unsigned public GET to keep details usable.
-            payload = try await sendPublicRead(
-                params: params,
+            var signedParams = params
+            payload = try await send(
+                params: &signedParams,
                 cachePolicy: .ttl(seconds: 900, staleFallbackSeconds: 86_400)
             ).payload
         }
@@ -468,7 +479,13 @@ final class LastfmAPIClient: LastfmAPI {
 
         let payload: [String: Any]
         do {
-            payload = try await send(params: &params, cachePolicy: .ttl(seconds: 900, staleFallbackSeconds: 86_400)).payload
+            // Prefer the public read endpoint for metadata. It consistently returns
+            // stats/artwork for read-only methods and avoids needless dependence on
+            // the signed POST session path.
+            payload = try await sendPublicRead(
+                params: params,
+                cachePolicy: .ttl(seconds: 900, staleFallbackSeconds: 86_400)
+            ).payload
         } catch let LastfmAPIError.api(code, _) where code == 6 {
             return LastfmArtistDetails(
                 name: artist,
@@ -482,10 +499,9 @@ final class LastfmAPIClient: LastfmAPI {
                 similarArtists: []
             )
         } catch {
-            // Read-only metadata endpoints can fail under signed POST in some
-            // edge cases. Retry via unsigned public GET to keep details usable.
-            payload = try await sendPublicRead(
-                params: params,
+            var signedParams = params
+            payload = try await send(
+                params: &signedParams,
                 cachePolicy: .ttl(seconds: 900, staleFallbackSeconds: 86_400)
             ).payload
         }
@@ -493,9 +509,17 @@ final class LastfmAPIClient: LastfmAPI {
             throw LastfmAPIError.invalidResponse
         }
 
+        let supplement = await scrapeArtistImageSupplement(
+            pageURL: firstString(artistData["url"]),
+            similarArtists: users(from: (artistData["similar"] as? [String: Any])?["artist"]).compactMap { item in
+                guard let name = firstString(item["name"]) else { return nil }
+                return (name, firstString(item["url"]))
+            }
+        )
+
         return LastfmArtistDetails(
             name: firstString(artistData["name"]) ?? artist,
-            imageURL: imageURL(artistData["image"]),
+            imageURL: imageURL(artistData["image"]) ?? supplement.imageURL,
             listeners: firstInt(artistData["stats"], key: "listeners"),
             playcount: firstInt(artistData["stats"], key: "playcount"),
             userPlaycount: firstInt(artistData["stats"], key: "userplaycount"),
@@ -507,7 +531,7 @@ final class LastfmAPIClient: LastfmAPI {
                 return LastfmSimilarArtist(
                     id: name,
                     name: name,
-                    imageURL: imageURL(item["image"]),
+                    imageURL: imageURL(item["image"]) ?? supplement.similarArtistImages[name],
                     url: firstString(item["url"])
                 )
             }
@@ -1122,7 +1146,7 @@ final class LastfmAPIClient: LastfmAPI {
 
         let data: Data
         do {
-            let response = try await urlSession.data(for: request)
+            let response = try await activeURLSession.data(for: request)
             data = response.0
         } catch {
             if let urlError = error as? URLError {
@@ -1272,7 +1296,7 @@ final class LastfmAPIClient: LastfmAPI {
         request.httpBody = formURLEncoded(bodyParams).data(using: .utf8)
 
         do {
-            let (data, _) = try await urlSession.data(for: request)
+            let (data, _) = try await activeURLSession.data(for: request)
             let payload = try parsePayload(data)
 
             if let code = parseErrorCode(payload["error"]) {
@@ -1340,7 +1364,7 @@ final class LastfmAPIClient: LastfmAPI {
         request.setValue("application/json", forHTTPHeaderField: "Accept")
 
         do {
-            let (data, _) = try await urlSession.data(for: request)
+            let (data, _) = try await activeURLSession.data(for: request)
             let payload = try parsePayload(data)
 
             if let code = parseErrorCode(payload["error"]) {
@@ -1514,6 +1538,65 @@ final class LastfmAPIClient: LastfmAPI {
         return trimmed
     }
 
+    private func scrapeArtistImageSupplement(
+        pageURL: String?,
+        similarArtists: [(name: String, url: String?)]
+    ) async -> ArtistImageSupplement {
+        guard let pageURL,
+              let mainURL = URL(string: pageURL) else {
+            return ArtistImageSupplement(imageURL: nil, similarArtistImages: [:])
+        }
+
+        let mainImage = await scrapeOpenGraphImage(from: mainURL)
+        var similarImages: [String: String] = [:]
+
+        for item in similarArtists.prefix(4) {
+            guard let urlString = item.url,
+                  let url = URL(string: urlString),
+                  let image = await scrapeOpenGraphImage(from: url) else {
+                continue
+            }
+            similarImages[item.name] = image
+        }
+
+        return ArtistImageSupplement(imageURL: mainImage, similarArtistImages: similarImages)
+    }
+
+    private func scrapeOpenGraphImage(from url: URL) async -> String? {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
+        request.setValue("LastfmModern/1.0", forHTTPHeaderField: "User-Agent")
+
+        guard let (data, _) = try? await activeURLSession.data(for: request),
+              let html = String(data: data, encoding: .utf8),
+              !html.isEmpty else {
+            return nil
+        }
+
+        let patterns = [
+            #"<meta[^>]+property=["']og:image["'][^>]+content=["']([^"']+)["']"#,
+            #"<meta[^>]+content=["']([^"']+)["'][^>]+property=["']og:image["']"#
+        ]
+
+        for pattern in patterns {
+            guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else {
+                continue
+            }
+            let range = NSRange(html.startIndex..<html.endIndex, in: html)
+            guard let match = regex.firstMatch(in: html, options: [], range: range),
+                  match.numberOfRanges > 1,
+                  let valueRange = Range(match.range(at: 1), in: html) else {
+                continue
+            }
+            if let candidate = normalizedImageCandidate(String(html[valueRange])) {
+                return candidate
+            }
+        }
+
+        return nil
+    }
+
     private func endpointCacheKey(params: [String: String]) -> String {
         params
             .sorted(by: { $0.key < $1.key })
@@ -1523,6 +1606,12 @@ final class LastfmAPIClient: LastfmAPI {
 
     private func signature(for params: [String: String]) -> String {
         LastfmSignature.make(params: params, sharedSecret: config.sharedSecret)
+    }
+
+    // Proxy preferences can change while the app is running, so requests read
+    // the current session lazily instead of binding network transport at init.
+    private var activeURLSession: URLSession {
+        sessionProvider()
     }
 
     private func formURLEncoded(_ params: [String: String]) -> String {
@@ -1550,6 +1639,58 @@ final class LastfmAPIClient: LastfmAPI {
         endpointCacheLock.lock()
         endpointCache[key] = entry
         endpointCacheLock.unlock()
+    }
+}
+
+extension URLSession {
+    static func lastfmSession(proxySettings: ProxySettings) -> URLSession {
+        switch proxySettings.mode {
+        case .system:
+            return .shared
+        case .none:
+            let configuration = URLSessionConfiguration.ephemeral
+            configuration.connectionProxyDictionary = [
+                kCFNetworkProxiesHTTPEnable as String: 0,
+                kCFNetworkProxiesHTTPSEnable as String: 0,
+                kCFNetworkProxiesSOCKSEnable as String: 0
+            ]
+            return URLSession(configuration: configuration)
+        case .http, .socks5:
+            guard proxySettings.hasRequiredEndpoint,
+                  let port = proxySettings.normalizedPort else {
+                return .shared
+            }
+            let configuration = URLSessionConfiguration.ephemeral
+            var proxy: [AnyHashable: Any] = [
+                kCFNetworkProxiesHTTPEnable as String: 0,
+                kCFNetworkProxiesHTTPSEnable as String: 0,
+                kCFNetworkProxiesSOCKSEnable as String: 0
+            ]
+            switch proxySettings.mode {
+            case .http:
+                proxy[kCFNetworkProxiesHTTPEnable as String] = 1
+                proxy[kCFNetworkProxiesHTTPSEnable as String] = 1
+                proxy[kCFNetworkProxiesHTTPProxy as String] = proxySettings.normalizedHost
+                proxy[kCFNetworkProxiesHTTPSProxy as String] = proxySettings.normalizedHost
+                proxy[kCFNetworkProxiesHTTPPort as String] = port
+                proxy[kCFNetworkProxiesHTTPSPort as String] = port
+            case .socks5:
+                proxy[kCFNetworkProxiesSOCKSEnable as String] = 1
+                proxy[kCFNetworkProxiesSOCKSProxy as String] = proxySettings.normalizedHost
+                proxy[kCFNetworkProxiesSOCKSPort as String] = port
+            default:
+                break
+            }
+            if let username = proxySettings.normalizedUsername {
+                proxy[kCFProxyUsernameKey as String] = username
+            }
+            if let password = proxySettings.normalizedPassword {
+                proxy[kCFProxyPasswordKey as String] = password
+            }
+            configuration.connectionProxyDictionary = proxy
+            configuration.requestCachePolicy = .reloadIgnoringLocalCacheData
+            return URLSession(configuration: configuration)
+        }
     }
 }
 

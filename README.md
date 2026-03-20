@@ -5,6 +5,7 @@ This repository now contains:
 1. The legacy Qt desktop client (historical codebase).
 2. `LastfmModern`, a modern macOS SwiftUI client focused on Last.fm scrobbling workflows.
    - Uses a single main-window model (plus menu bar controls) for lower overhead.
+   - Uses built-in app credentials for normal end-user sign-in.
 
 ## Active target: `LastfmModern` (macOS)
 
@@ -26,14 +27,16 @@ See full app documentation in [LastfmModern/README.md](/Users/haa/Desktop/projec
 open LastfmModern/LastfmModern.xcodeproj
 ```
 
-2. Optional (development override only): set custom API credentials in your shell:
+2. Sign in with your Last.fm username and password inside the app.
+
+3. Optional (development override only): set custom API credentials in your shell before launching:
 
 ```bash
 export LASTFM_API_KEY="your_api_key"
 export LASTFM_SHARED_SECRET="your_shared_secret"
 ```
 
-3. Run tests from terminal:
+4. Run tests from terminal:
 
 ```bash
 xcodebuild \
@@ -47,7 +50,7 @@ xcodebuild \
 ## Repository layout
 
 - `LastfmModern/`: SwiftUI macOS app (active).
-- `liblastfm/`: cloned `lastfm/liblastfm` library source.
+- `liblastfm/`: optional local reference checkout of `lastfm/liblastfm` kept out of version control.
 - `app/`, `common/`, `plugins/`, `lib/`: legacy Qt desktop client code.
 
 ## Legacy Qt client status
@@ -56,4 +59,4 @@ The root legacy client build instructions in older revisions targeted Qt4-era to
 
 ## Security note
 
-Do not commit API key/shared secret values into tracked files. Prefer environment variables (`LASTFM_API_KEY`, `LASTFM_SHARED_SECRET`).
+Do not commit API key/shared secret values into tracked files. Prefer environment variables (`LASTFM_API_KEY`, `LASTFM_SHARED_SECRET`) only for developer overrides.

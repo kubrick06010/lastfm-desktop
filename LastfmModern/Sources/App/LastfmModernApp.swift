@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import ServiceManagement
 
 enum AppEvents {
     static let showDiagnostics = Notification.Name("fm.lastfmmodern.showDiagnostics")
@@ -8,16 +9,23 @@ enum AppEvents {
 @main
 struct LastfmModernApp: App {
     @StateObject private var scrobbleService = ScrobbleService()
+    @StateObject private var launchAtLoginController = LaunchAtLoginController()
+    @StateObject private var proxySettingsController = ProxySettingsController()
     @Environment(\.openWindow) private var openWindow
     @AppStorage("ui.showDockIcon") private var showDockIcon = true
+    @AppStorage("app.launchAtLogin") private var launchAtLoginEnabled = false
+    @State private var handledInitialWindowPresentation = false
 
     var body: some Scene {
         Window("Last.fm modern", id: "main") {
             ContentView()
                 .environmentObject(scrobbleService)
+                .environmentObject(launchAtLoginController)
+                .environmentObject(proxySettingsController)
                 .frame(minWidth: 760, minHeight: 560)
                 .onAppear {
                     applyDockIconVisibility()
+                    handleInitialWindowPresentation()
                 }
                 .onChange(of: showDockIcon) { _ in
                     applyDockIconVisibility()
@@ -26,13 +34,6 @@ struct LastfmModernApp: App {
         .defaultSize(width: 1180, height: 760)
         .commands {
             CommandMenu("Tools") {
-                Button("Diagnostics") {
-                    showDiagnosticsInMainWindow()
-                }
-                .keyboardShortcut("d", modifiers: [.command, .option])
-
-                Divider()
-
                 Button(showDockIcon ? "Switch To Menu Bar Only" : "Show Dock Icon") {
                     toggleDockIconVisibility()
                 }
@@ -40,40 +41,26 @@ struct LastfmModernApp: App {
             }
         }
 
-        MenuBarExtra("Last.fm", systemImage: "music.note") {
-            VStack(alignment: .leading, spacing: 10) {
-                Button(showDockIcon ? "Switch to Menu Bar only" : "Show Dock icon") {
-                    toggleDockIconVisibility()
-                }
-
-                Button("Open Last.fm modern") {
-                    openWindow(id: "main")
-                    NSApp.activate(ignoringOtherApps: true)
-                }
-
-                Button("Diagnostics") {
-                    showDiagnosticsInMainWindow()
-                }
-
-                Divider()
-
-                Toggle("Enable scrobbling", isOn: Binding(
-                    get: { scrobbleService.scrobblingEnabled },
-                    set: { enabled in
-                        if enabled != scrobbleService.scrobblingEnabled {
-                            scrobbleService.toggleScrobbling()
-                        }
-                    }
-                ))
-            }
-            .padding()
+        MenuBarExtra {
+            MenuBarPanel(
+                scrobbleService: scrobbleService,
+                showDockIcon: showDockIcon,
+                toggleDockIconVisibility: toggleDockIconVisibility,
+                openMainWindow: openMainWindow,
+                openLegacySettingsWindow: openLegacySettingsWindow,
+                quitApp: quitApp
+            )
+        } label: {
+            MenuBarStatusIcon(isEnabled: scrobbleService.scrobblingEnabled)
         }
         .menuBarExtraStyle(.window)
 
         Settings {
             SettingsView()
                 .environmentObject(scrobbleService)
-                .frame(width: 480, height: 280)
+                .environmentObject(launchAtLoginController)
+                .environmentObject(proxySettingsController)
+                .frame(minWidth: 760, minHeight: 520)
         }
     }
 
@@ -96,6 +83,272 @@ struct LastfmModernApp: App {
         DispatchQueue.main.async {
             NotificationCenter.default.post(name: AppEvents.showDiagnostics, object: nil)
         }
+    }
+
+    private func openMainWindow() {
+        openWindow(id: "main")
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func openLegacySettingsWindow() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
+    }
+
+    private func quitApp() {
+        NSApp.terminate(nil)
+    }
+
+    private func handleInitialWindowPresentation() {
+        guard !handledInitialWindowPresentation else { return }
+        handledInitialWindowPresentation = true
+
+        // Login-launched apps are typically not the active app when they finish
+        // booting. Use that as a best-effort signal to keep startup silent when
+        // the user asked for menu-bar-only mode.
+        guard launchAtLoginEnabled, !showDockIcon else { return }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
+            guard !NSApp.isActive else { return }
+            NSApp.windows
+                .first(where: { $0.identifier?.rawValue == "main" || $0.title == "Last.fm modern" })?
+                .orderOut(nil)
+        }
+    }
+}
+
+private struct MenuBarStatusIcon: View {
+    let isEnabled: Bool
+
+    var body: some View {
+        // Render explicit enabled/disabled bitmap states so the menu bar icon
+        // changes reliably instead of depending on template tint handling.
+        Image(nsImage: menuBarStatusImage(isEnabled: isEnabled))
+            .frame(width: 18, height: 18)
+            .accessibilityLabel(isEnabled ? "Scrobbling enabled" : "Scrobbling disabled")
+    }
+
+    private func menuBarStatusImage(isEnabled: Bool) -> NSImage {
+        guard let base = NSImage(named: "MenuBarAudioscrobbler") else {
+            return NSImage()
+        }
+        let source = base.copy() as? NSImage ?? base
+        source.isTemplate = false
+        return isEnabled ? source : source.tinted(with: NSColor(calibratedWhite: 0.78, alpha: 1))
+    }
+}
+
+private struct MenuBarPanel: View {
+    @ObservedObject var scrobbleService: ScrobbleService
+    let showDockIcon: Bool
+    let toggleDockIconVisibility: () -> Void
+    let openMainWindow: () -> Void
+    let openLegacySettingsWindow: () -> Void
+    let quitApp: () -> Void
+
+    private let gridColumns = [
+        GridItem(.flexible(), spacing: 8),
+        GridItem(.flexible(), spacing: 8)
+    ]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            nowPlayingHeader
+
+            Divider()
+
+            Toggle(isOn: Binding(
+                get: { scrobbleService.scrobblingEnabled },
+                set: { enabled in
+                    if enabled != scrobbleService.scrobblingEnabled {
+                        scrobbleService.toggleScrobbling()
+                    }
+                }
+            )) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Scrobbling")
+                        .font(.custom("Avenir Next Demi Bold", size: 13))
+                    Text(scrobbleService.scrobblingEnabled ? "Enabled" : "Disabled")
+                        .font(.custom("Avenir Next Regular", size: 11))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .toggleStyle(.switch)
+
+            if let username = scrobbleService.sessionUsername, !username.isEmpty {
+                accountSection(username: username)
+            }
+
+            LazyVGrid(columns: gridColumns, spacing: 8) {
+                commandButton(showDockIcon ? "Menu Bar Only" : "Show Dock", systemImage: "rectangle.on.rectangle") {
+                    toggleDockIconVisibility()
+                }
+                commandButton("Open App", systemImage: "macwindow") {
+                    openMainWindow()
+                }
+                settingsButton
+                commandButton("Quit", systemImage: "power") {
+                    quitApp()
+                }
+            }
+        }
+        .padding(14)
+        .frame(width: 320)
+    }
+
+    private var nowPlayingHeader: some View {
+        HStack(alignment: .top, spacing: 12) {
+            menuArtwork
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(trackTitle)
+                    .font(.custom("Avenir Next Demi Bold", size: 15))
+                    .lineLimit(2)
+
+                Text(trackSubtitle)
+                    .font(.custom("Avenir Next Medium", size: 12))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+
+                if let source = scrobbleService.currentTrack?.sourceApp, !source.isEmpty {
+                    Text(source.uppercased())
+                        .font(.custom("Avenir Next Demi Bold", size: 10))
+                        .foregroundStyle(.orange)
+                        .padding(.top, 2)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+    }
+
+    private var menuArtwork: some View {
+        Group {
+            if let url = resolvedArtworkURL, let imageURL = URL(string: url) {
+                AsyncImage(url: imageURL) { phase in
+                    switch phase {
+                    case .success(let image):
+                        image
+                            .resizable()
+                            .scaledToFill()
+                    default:
+                        placeholderArtwork
+                    }
+                }
+            } else {
+                placeholderArtwork
+            }
+        }
+        .frame(width: 54, height: 54)
+        .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+        )
+    }
+
+    private var placeholderArtwork: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(Color.secondary.opacity(0.14))
+            Image(systemName: "music.note")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func accountSection(username: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("Account")
+                .font(.custom("Avenir Next Demi Bold", size: 12))
+            HStack {
+                Text(username)
+                    .font(.custom("Avenir Next Medium", size: 13))
+                Spacer()
+                Text("Single account")
+                    .font(.custom("Avenir Next Regular", size: 11))
+                    .foregroundStyle(.secondary)
+            }
+        }
+    }
+
+    private func commandButton(_ title: String, systemImage: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            commandLabel(title: title, systemImage: systemImage)
+        }
+        .buttonStyle(.plain)
+    }
+
+    private var settingsButton: some View {
+        Group {
+            if #available(macOS 14.0, *) {
+                SettingsLink {
+                    commandLabel(title: "Settings", systemImage: "gearshape")
+                }
+                .buttonStyle(.plain)
+            } else {
+                Button {
+                    openLegacySettingsWindow()
+                } label: {
+                    commandLabel(title: "Settings", systemImage: "gearshape")
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func commandLabel(title: String, systemImage: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: systemImage)
+                .font(.system(size: 12, weight: .semibold))
+            Text(title)
+                .font(.custom("Avenir Next Medium", size: 12))
+            Spacer(minLength: 0)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+    }
+
+    private var trackTitle: String {
+        scrobbleService.currentTrackDetails?.name ?? scrobbleService.currentTrack?.title ?? "No track playing"
+    }
+
+    private var trackSubtitle: String {
+        guard let currentTrack = scrobbleService.currentTrack else {
+            return scrobbleService.sessionUsername.map { "Signed in as \($0)" } ?? "Waiting for playback"
+        }
+
+        let artist = scrobbleService.currentTrackDetails?.artist ?? currentTrack.artist
+        if let album = scrobbleService.currentTrackDetails?.album ?? currentTrack.album, !album.isEmpty {
+            return "\(artist) — \(album)"
+        }
+        return artist
+    }
+
+    private var resolvedArtworkURL: String? {
+        if let explicit = scrobbleService.currentTrackDetails?.imageURL, !explicit.isEmpty {
+            return explicit
+        }
+        if let artistImage = scrobbleService.currentArtistDetails?.imageURL, !artistImage.isEmpty {
+            return artistImage
+        }
+        return nil
+    }
+}
+
+private extension NSImage {
+    func tinted(with color: NSColor) -> NSImage {
+        let image = copy() as? NSImage ?? self
+        let result = NSImage(size: image.size)
+        result.lockFocus()
+        let rect = NSRect(origin: .zero, size: image.size)
+        image.draw(in: rect)
+        color.set()
+        rect.fill(using: .sourceAtop)
+        result.unlockFocus()
+        result.isTemplate = false
+        return result
     }
 }
 

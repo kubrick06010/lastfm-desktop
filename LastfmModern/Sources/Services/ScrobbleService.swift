@@ -37,6 +37,7 @@ final class ScrobbleService: ObservableObject {
     @Published private(set) var queueFilePath = ""
     @Published private(set) var sessionStatus = "Not authenticated"
     @Published private(set) var sessionUsername: String?
+    @Published private(set) var storedAccounts: [LastfmSession] = []
     @Published private(set) var capabilitiesStatus = "Unknown"
     @Published private(set) var validationSource = "Live"
     @Published private(set) var lastRecoveryHint: String?
@@ -78,7 +79,7 @@ final class ScrobbleService: ObservableObject {
 
     private var api: LastfmAPI
     private let monitor: PlayerMonitor
-    private let sessionStore: LastfmSessionStoring
+    private let sessionStore: LastfmAccountsStoring
     private let queueStore: ScrobbleQueueStoring
 
     private var currentTrackStart: Date?
@@ -104,7 +105,7 @@ final class ScrobbleService: ObservableObject {
     init(
         api: LastfmAPI? = nil,
         monitor: PlayerMonitor = makeDefaultPlayerMonitor(),
-        sessionStore: LastfmSessionStoring = LastfmSessionStore(),
+        sessionStore: LastfmAccountsStoring = LastfmSessionStore(),
         queueStore: ScrobbleQueueStoring = ScrobbleQueueStore(),
         retryJitter: @escaping () -> Double = { Double.random(in: 0.85...1.15) },
         sleepFunction: @escaping @Sendable (UInt64) async -> Void = { nanos in
@@ -114,7 +115,12 @@ final class ScrobbleService: ObservableObject {
         if let api {
             self.api = api
         } else if let config = LastfmAPIConfig.fromEnvironment() {
-            self.api = LastfmAPIClient(config: config)
+            self.api = LastfmAPIClient(
+                config: config,
+                sessionProvider: {
+                    URLSession.lastfmSession(proxySettings: ProxySettingsStore().load())
+                }
+            )
         } else {
             self.api = LastfmAPIStub()
         }
@@ -129,6 +135,7 @@ final class ScrobbleService: ObservableObject {
         self.backendName = self.api.isConfigured ? "Live Last.fm API" : "Stub (missing LASTFM_API_KEY and LASTFM_SHARED_SECRET)"
         self.monitorStatus = monitor.statusDescription
         self.queueFilePath = queueStore.queueFileURL.path
+        self.storedAccounts = sessionStore.allSessions()
 
         if let session = sessionStore.load() {
             self.api.restoreSession(session)
@@ -191,6 +198,7 @@ final class ScrobbleService: ObservableObject {
         do {
             let session = try await api.authenticate(username: username, password: password)
             sessionStore.save(session)
+            storedAccounts = sessionStore.allSessions()
             isAuthenticated = api.isAuthenticated
             sessionUsername = session.name
             friendGraphCache = [:]
@@ -213,6 +221,7 @@ final class ScrobbleService: ObservableObject {
     func signOut() {
         api.clearSession()
         sessionStore.clear()
+        storedAccounts = sessionStore.allSessions()
         isAuthenticated = false
         sessionUsername = nil
         authError = nil
@@ -247,6 +256,75 @@ final class ScrobbleService: ObservableObject {
         friendsRefreshTask?.cancel()
         friendsRefreshTask = nil
         cancelRetrySchedule()
+    }
+
+    func switchAccount(username: String) async {
+        guard let targetSession = sessionStore.allSessions().first(where: {
+            $0.name.caseInsensitiveCompare(username) == .orderedSame
+        }) else {
+            return
+        }
+        sessionStore.setActive(username: targetSession.name)
+        api.restoreSession(targetSession)
+        storedAccounts = sessionStore.allSessions()
+        isAuthenticated = api.isAuthenticated
+        sessionUsername = targetSession.name
+        authError = nil
+        friendGraphCache = [:]
+        separationByUser = [:]
+        separationStatus = "Not calculated"
+        socialGraph = nil
+        scheduleRetryIfNeeded()
+        await validateSessionOnStartup()
+        await refreshProfileData()
+        await refreshScrobblesData()
+        await refreshFriendsData()
+        await refreshNeighboursData()
+        startFriendsAutoRefresh()
+    }
+
+    func removeAccount(username: String) async {
+        let removingActive = sessionUsername?.caseInsensitiveCompare(username) == .orderedSame
+        sessionStore.remove(username: username)
+        storedAccounts = sessionStore.allSessions()
+
+        guard removingActive else { return }
+
+        api.clearSession()
+        if let nextSession = sessionStore.load() {
+            api.restoreSession(nextSession)
+            isAuthenticated = api.isAuthenticated
+            sessionUsername = nextSession.name
+            authError = nil
+            await validateSessionOnStartup()
+            await refreshProfileData()
+            await refreshScrobblesData()
+            await refreshFriendsData()
+            await refreshNeighboursData()
+            startFriendsAutoRefresh()
+        } else {
+            isAuthenticated = false
+            sessionUsername = nil
+            sessionStatus = "Not authenticated"
+            capabilitiesStatus = "Unknown"
+            validationSource = "Live"
+            profile = nil
+            latestScrobbles = []
+            friendsListening = []
+            neighbours = []
+            weeklyTopArtists = []
+            monthlyTopArtists = []
+            yearlyTopArtists = []
+            overallTopArtists = []
+            globalTopArtistNames = []
+            lovedTracksCount = nil
+            tracksPerDayAverage = nil
+            profileStatus = "Not loaded"
+            scrobblesStatus = "Not loaded"
+            friendsStatus = "Not loaded"
+            neighboursStatus = "Not loaded"
+            isSubscriber = false
+        }
     }
 
     func refreshExplore() async {

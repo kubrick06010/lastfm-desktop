@@ -50,7 +50,10 @@ private struct SocialGraphTarget: Identifiable, Equatable {
 }
 
 struct ContentView: View {
+    @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var scrobbleService: ScrobbleService
+    @AppStorage("ui.detailInspectorWidth") private var detailInspectorWidth = 560.0
+    @AppStorage("ui.socialInspectorWidth") private var socialInspectorWidth = 860.0
     @State private var selectedTab: WorkspaceTab? = .dashboard
     @State private var username = ""
     @State private var password = ""
@@ -84,67 +87,88 @@ struct ContentView: View {
                     }
                     .padding(.vertical, 12)
                     .frame(maxWidth: .infinity)
-                    .background(Color.black.opacity(0.28))
+                    .background(appBarBackground)
 
-                ZStack {
-                    AppBackdrop()
-                    switch selectedTab ?? .dashboard {
-                    case .dashboard:
-                        DashboardView { track, artist, imageURL in
-                            openDeepLink(track: track, artist: artist, imageURL: imageURL)
-                        }
-                    case .queue:
-                        QueueView()
-                    case .profile:
-                        ProfileView()
-                    case .scrobbles:
-                        ScrobblesView(query: $scrobblesQuery) { item in
-                            openDeepLink(scrobble: item)
-                        }
-                    case .reports:
-                        ReportsView()
-                    case .charts:
-                        ChartsView(
-                            onOpenTrack: { track, artist in
-                                openDeepLink(track: track, artist: artist)
-                            },
-                            onOpenArtist: { artist in
-                                openDeepLink(track: nil, artist: artist)
+                GeometryReader { proxy in
+                    let availableWidth = proxy.size.width
+                    let resolvedDetailWidth = clampedInspectorWidth(
+                        preferred: detailInspectorWidth,
+                        availableWidth: availableWidth,
+                        minimum: 500,
+                        maximumRatio: 0.46,
+                        hardCap: 860
+                    )
+                    let resolvedSocialWidth = clampedInspectorWidth(
+                        preferred: socialInspectorWidth,
+                        availableWidth: availableWidth,
+                        minimum: 720,
+                        maximumRatio: 0.68,
+                        hardCap: 1180
+                    )
+
+                    ZStack {
+                        AppBackdrop()
+                        switch selectedTab ?? .dashboard {
+                        case .dashboard:
+                            DashboardView { track, artist, imageURL in
+                                openDeepLink(track: track, artist: artist, imageURL: imageURL)
                             }
-                        )
-                    case .friends:
-                        FriendsView(
-                            query: $friendsQuery,
-                            onOpenFriendTrack: { friend in
-                                if let track = friend.track, let artist = friend.artist {
-                                    openDeepLink(track: track, artist: artist, imageURL: friend.imageURL)
+                        case .queue:
+                            QueueView()
+                        case .profile:
+                            ProfileView()
+                        case .scrobbles:
+                            ScrobblesView(query: $scrobblesQuery) { item in
+                                openDeepLink(scrobble: item)
+                            }
+                        case .reports:
+                            ReportsView()
+                        case .charts:
+                            ChartsView(
+                                onOpenTrack: { track, artist in
+                                    openDeepLink(track: track, artist: artist)
+                                },
+                                onOpenArtist: { artist in
+                                    openDeepLink(track: nil, artist: artist)
                                 }
-                            },
-                            onOpenGraph: { friend in
-                                openSocialGraph(forUser: friend.user, profileURL: "https://www.last.fm/user/\(friend.user)")
-                            }
-                        )
-                    case .neighbours:
-                        NeighboursView(query: $neighboursQuery) { neighbour in
-                            openSocialGraph(for: neighbour)
-                        }
-                    case .account:
-                        AccountView(username: $username, password: $password)
-                    }
-
-                    if let deepLinkTarget {
-                        Color.black.opacity(0.35)
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.22)) {
-                                    self.deepLinkTarget = nil
-                                    scrobbleService.clearInspection()
+                            )
+                        case .friends:
+                            FriendsView(
+                                query: $friendsQuery,
+                                onOpenFriendTrack: { friend in
+                                    if let track = friend.track, let artist = friend.artist {
+                                        openDeepLink(track: track, artist: artist, imageURL: friend.imageURL)
+                                    }
+                                },
+                                onOpenGraph: { friend in
+                                    openSocialGraph(forUser: friend.user, profileURL: "https://www.last.fm/user/\(friend.user)")
                                 }
+                            )
+                        case .neighbours:
+                            NeighboursView(query: $neighboursQuery) { neighbour in
+                                openSocialGraph(for: neighbour)
                             }
+                        case .account:
+                            AccountView(username: $username, password: $password)
+                        }
 
-                        VStack {
-                            HStack {
+                        if let deepLinkTarget {
+                            appModalScrim
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.22)) {
+                                        self.deepLinkTarget = nil
+                                        scrobbleService.clearInspection()
+                                    }
+                                }
+
+                            HStack(spacing: 0) {
                                 Spacer()
+                                InspectorResizeHandle(
+                                    width: $detailInspectorWidth,
+                                    minimum: 500,
+                                    maximum: min(860, availableWidth * 0.46)
+                                )
                                 ScrollView {
                                     VStack(alignment: .leading, spacing: 12) {
                                         HStack {
@@ -166,30 +190,33 @@ struct ContentView: View {
                                     }
                                     .padding(16)
                                 }
-                                .frame(width: 460)
-                                .background(.ultraThinMaterial)
+                                .frame(width: resolvedDetailWidth)
+                                .background(appSidebarBackground)
                                 .overlay(alignment: .leading) {
-                                    Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1)
+                                    Rectangle().fill(appDividerColor).frame(width: 1)
                                 }
                                 .transition(.move(edge: .trailing))
                             }
+                            .animation(.easeInOut(duration: 0.22), value: deepLinkTarget.id)
                         }
-                        .animation(.easeInOut(duration: 0.22), value: deepLinkTarget.id)
-                    }
 
-                    if let socialGraphTarget {
-                        Color.black.opacity(0.35)
-                            .ignoresSafeArea()
-                            .onTapGesture {
-                                withAnimation(.easeInOut(duration: 0.22)) {
-                                    self.socialGraphTarget = nil
-                                    self.selectedProfileURL = nil
+                        if let socialGraphTarget {
+                            appModalScrim
+                                .ignoresSafeArea()
+                                .onTapGesture {
+                                    withAnimation(.easeInOut(duration: 0.22)) {
+                                        self.socialGraphTarget = nil
+                                        self.selectedProfileURL = nil
+                                    }
                                 }
-                            }
 
-                        VStack {
-                            HStack {
+                            HStack(spacing: 0) {
                                 Spacer()
+                                InspectorResizeHandle(
+                                    width: $socialInspectorWidth,
+                                    minimum: 720,
+                                    maximum: min(1180, availableWidth * 0.68)
+                                )
                                 VStack(alignment: .leading, spacing: 10) {
                                     HStack {
                                         Button {
@@ -241,28 +268,21 @@ struct ContentView: View {
                                     }
                                 }
                                 .padding(16)
-                                .frame(width: 760, height: 760)
-                                .background(.ultraThinMaterial)
+                                .frame(width: resolvedSocialWidth, height: min(max(760, proxy.size.height - 24), 980))
+                                .background(appSidebarBackground)
                                 .overlay(alignment: .leading) {
-                                    Rectangle().fill(Color.white.opacity(0.12)).frame(width: 1)
+                                    Rectangle().fill(appDividerColor).frame(width: 1)
                                 }
                                 .transition(.move(edge: .trailing))
                             }
+                            .animation(.easeInOut(duration: 0.22), value: socialGraphTarget.id)
                         }
-                        .animation(.easeInOut(duration: 0.22), value: socialGraphTarget.id)
                     }
                 }
 
                 VStack(spacing: 0) {
-                    HStack(spacing: 10) {
-                        Image(systemName: "gearshape.fill")
-                        Text("\(scrobbleService.profile?.name ?? "Guest") (\(scrobbleService.isAuthenticated ? "Online" : "Offline"))")
-                            .font(.custom("Avenir Next Medium", size: 14))
-                        Spacer()
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.black.opacity(0.35))
+                    settingsFooter
+                        .background(appBarBackground)
 
                     BottomTabShell(selectedTab: Binding(
                         get: { selectedTab ?? .scrobbles },
@@ -273,6 +293,12 @@ struct ContentView: View {
         }
         .onReceive(NotificationCenter.default.publisher(for: AppEvents.showDiagnostics)) { _ in
             isDiagnosticsPresented = true
+        }
+        .onChange(of: selectedTab) { newValue in
+            guard newValue == .scrobbles else { return }
+            Task {
+                await scrobbleService.refreshScrobbles()
+            }
         }
         .sheet(isPresented: $isDiagnosticsPresented) {
             DiagnosticsView()
@@ -286,6 +312,52 @@ struct ContentView: View {
             return "\(current.artist) - \(current.title)"
         }
         return "No track playing"
+    }
+
+    private var appBarBackground: Color {
+        colorScheme == .dark ? Color.black.opacity(0.28) : Color.white.opacity(0.78)
+    }
+
+    private var appModalScrim: Color {
+        colorScheme == .dark ? Color.black.opacity(0.35) : Color.black.opacity(0.12)
+    }
+
+    private var appSidebarBackground: AnyShapeStyle {
+        colorScheme == .dark ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(.regularMaterial)
+    }
+
+    private var appDividerColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.12)
+    }
+
+    @ViewBuilder
+    private var settingsFooter: some View {
+        if #available(macOS 14.0, *) {
+            SettingsLink {
+                settingsFooterLabel
+            }
+            .buttonStyle(.plain)
+        } else {
+            Button {
+                NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+                NSApp.activate(ignoringOtherApps: true)
+            } label: {
+                settingsFooterLabel
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
+    private var settingsFooterLabel: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "gearshape.fill")
+            Text("\(scrobbleService.profile?.name ?? "Guest") (\(scrobbleService.isAuthenticated ? "Online" : "Offline"))")
+                .font(.custom("Avenir Next Medium", size: 14))
+            Spacer()
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .contentShape(Rectangle())
     }
 
     private func openDeepLink(scrobble: LastfmRecentScrobble) {
@@ -345,9 +417,21 @@ struct ContentView: View {
         let encoded = username.addingPercentEncoding(withAllowedCharacters: allowed) ?? username
         return URL(string: "https://www.last.fm/user/\(encoded)")
     }
+
+    private func clampedInspectorWidth(
+        preferred: Double,
+        availableWidth: CGFloat,
+        minimum: CGFloat,
+        maximumRatio: CGFloat,
+        hardCap: CGFloat
+    ) -> CGFloat {
+        let maximum = min(hardCap, availableWidth * maximumRatio)
+        return min(max(CGFloat(preferred), minimum), maximum)
+    }
 }
 
 private struct BottomTabShell: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var selectedTab: WorkspaceTab
     private let tabs: [WorkspaceTab] = [.scrobbles, .reports, .charts]
     private let accent = Color(red: 1.0, green: 0.30, blue: 0.35)
@@ -373,19 +457,26 @@ private struct BottomTabShell: View {
         }
         .background(
             LinearGradient(
-                colors: [Color.black.opacity(0.9), Color(red: 0.12, green: 0.13, blue: 0.16)],
+                colors: colorScheme == .dark
+                    ? [Color.black.opacity(0.9), Color(red: 0.12, green: 0.13, blue: 0.16)]
+                    : [Color.white.opacity(0.88), Color(red: 0.92, green: 0.94, blue: 0.98)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         )
         .overlay(alignment: .top) {
-            Rectangle().fill(Color.white.opacity(0.08)).frame(height: 1)
+            Rectangle()
+                .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.08))
+                .frame(height: 1)
         }
     }
 }
 
 private struct DashboardView: View {
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.openURL) private var openURL
     @EnvironmentObject private var scrobbleService: ScrobbleService
+    @State private var moodPalette = DashboardMoodPalette.fallback
     let onOpenTrackDetail: (_ track: String, _ artist: String, _ imageURL: String?) -> Void
 
     var body: some View {
@@ -396,120 +487,103 @@ private struct DashboardView: View {
                     .foregroundStyle(.primary)
 
                 if let nowPlaying = scrobbleService.currentTrack {
-                    ZStack {
-                        dashboardBackgroundArt(
-                            dashboardHeroImageURL
-                        )
-
-                        VStack(alignment: .leading, spacing: 14) {
-                            HStack {
-                                Label {
-                                    Text("Scrobbling from \(nowPlaying.sourceApp ?? "Music")")
-                                        .font(.custom("Avenir Next Medium", size: 15))
-                                } icon: {
-                                    Image(systemName: "music.note")
-                                        .font(.system(size: 15, weight: .semibold))
-                                }
-                                Spacer()
-                                dashboardMiniProgress
+                    VStack(alignment: .leading, spacing: 14) {
+                        HStack {
+                            Label {
+                                Text("Scrobbling from \(nowPlaying.sourceApp ?? "Music")")
+                                    .font(.custom("Avenir Next Medium", size: 15))
+                            } icon: {
+                                Image(systemName: "music.note")
+                                    .font(.system(size: 15, weight: .semibold))
                             }
+                            Spacer()
+                            dashboardMiniProgress
+                        }
 
-                            Divider().overlay(Color.white.opacity(0.10))
+                        Divider().overlay(sectionDividerColor)
 
-                            HStack(alignment: .top, spacing: 14) {
-                                dashboardArt(dashboardTrackImageURL, size: 132)
+                        HStack(alignment: .top, spacing: 14) {
+                            dashboardArt(dashboardTrackImageURL, size: 132)
+                                .onTapGesture {
+                                    openDetailForCurrentTrack(nowPlaying)
+                                }
+
+                            VStack(alignment: .leading, spacing: 6) {
+                                Text(scrobbleService.currentTrackDetails?.name ?? nowPlaying.title)
+                                    .font(.custom("Avenir Next Demi Bold", size: 28))
+                                    .lineLimit(3)
+                                    .contentShape(Rectangle())
                                     .onTapGesture {
                                         openDetailForCurrentTrack(nowPlaying)
                                     }
-
-                                VStack(alignment: .leading, spacing: 6) {
-                                    Text(scrobbleService.currentTrackDetails?.name ?? nowPlaying.title)
-                                        .font(.custom("Avenir Next Demi Bold", size: 28))
-                                        .lineLimit(3)
-                                        .contentShape(Rectangle())
-                                        .onTapGesture {
-                                            openDetailForCurrentTrack(nowPlaying)
-                                        }
-                                        .simultaneousGesture(
-                                            MagnificationGesture()
-                                                .onEnded { value in
-                                                    guard value > 1.05 else { return }
-                                                    openDetailForCurrentTrack(nowPlaying)
-                                                }
-                                        )
-                                    Text("by \(scrobbleService.currentTrackDetails?.artist ?? nowPlaying.artist)")
-                                        .font(.custom("Avenir Next Demi Bold", size: 18))
-                                        .foregroundStyle(.secondary)
-                                    if let album = scrobbleService.currentTrackDetails?.album ?? nowPlaying.album {
-                                        Text("from \(album)")
-                                            .font(.custom("Avenir Next Medium", size: 14))
-                                            .foregroundStyle(.secondary)
-                                    }
-                                    HStack(spacing: 14) {
-                                        Image(systemName: "heart")
-                                        Image(systemName: "tag")
-                                        Image(systemName: "square.and.arrow.up")
-                                    }
-                                    .font(.system(size: 18, weight: .medium))
+                                    .simultaneousGesture(
+                                        MagnificationGesture()
+                                            .onEnded { value in
+                                                guard value > 1.05 else { return }
+                                                openDetailForCurrentTrack(nowPlaying)
+                                            }
+                                    )
+                                Text("by \(scrobbleService.currentTrackDetails?.artist ?? nowPlaying.artist)")
+                                    .font(.custom("Avenir Next Demi Bold", size: 18))
                                     .foregroundStyle(.secondary)
-                                    .padding(.top, 2)
-                                }
-                                Spacer()
-                            }
-
-                            trackInsightsCard
-
-                            Divider().overlay(Color.white.opacity(0.10))
-
-                            VStack(alignment: .leading, spacing: 10) {
-                                Text(scrobbleService.currentArtistDetails?.name ?? nowPlaying.artist)
-                                    .font(.custom("Avenir Next Demi Bold", size: 22))
-
-                                HStack(alignment: .top, spacing: 14) {
-                                    dashboardArt(scrobbleService.currentArtistDetails?.imageURL ?? dashboardTrackImageURL, size: 126)
-                                    Text(artistSummaryText)
-                                        .font(.custom("Avenir Next Regular", size: 15))
-                                        .lineLimit(6)
-                                        .foregroundStyle(.secondary)
-                                        .frame(maxWidth: .infinity, alignment: .leading)
-                                }
-
-                                HStack(spacing: 0) {
-                                    statColumn("Listeners", scrobbleService.currentArtistDetails?.listeners)
-                                    statColumn("Plays", scrobbleService.currentArtistDetails?.playcount)
-                                    statColumn("Plays in your library", scrobbleService.currentTrackDetails?.userPlaycount)
-                                }
-                                .overlay {
-                                    HStack {
-                                        Divider().frame(height: 36)
-                                        Spacer()
-                                        Divider().frame(height: 36)
-                                    }
-                                    .padding(.horizontal, 12)
-                                    .opacity(0.35)
-                                }
-
-                                if let tags = scrobbleService.currentArtistDetails?.tags, !tags.isEmpty {
-                                    Text("Popular tags: \(tags.prefix(6).joined(separator: " · "))")
+                                if let album = scrobbleService.currentTrackDetails?.album ?? nowPlaying.album {
+                                    Text("from \(album)")
                                         .font(.custom("Avenir Next Medium", size: 14))
                                         .foregroundStyle(.secondary)
                                 }
+                                HStack(spacing: 14) {
+                                    Image(systemName: "heart")
+                                    Image(systemName: "tag")
+                                    Image(systemName: "square.and.arrow.up")
+                                }
+                                .font(.system(size: 18, weight: .medium))
+                                .foregroundStyle(.secondary)
+                                .padding(.top, 2)
+                            }
+                            Spacer()
+                        }
 
-                                if let similar = scrobbleService.currentArtistDetails?.similarArtists, !similar.isEmpty {
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        Text("Similar Artists")
-                                            .font(.custom("Avenir Next Demi Bold", size: 18))
-                                        ScrollView(.horizontal, showsIndicators: false) {
-                                            HStack(spacing: 18) {
-                                                ForEach(similar.prefix(6), id: \.name) { item in
-                                                    VStack(alignment: .leading, spacing: 6) {
-                                                        dashboardArt(item.imageURL, size: 72)
-                                                        Text(item.name)
-                                                            .font(.custom("Avenir Next Medium", size: 14))
-                                                            .lineLimit(1)
-                                                    }
-                                                    .frame(width: 90, alignment: .leading)
-                                                }
+                        trackInsightsCard
+
+                        Divider().overlay(sectionDividerColor)
+
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(scrobbleService.currentArtistDetails?.name ?? nowPlaying.artist)
+                                .font(.custom("Avenir Next Demi Bold", size: 22))
+
+                            HStack(alignment: .top, spacing: 14) {
+                                dashboardArt(scrobbleService.currentArtistDetails?.imageURL ?? dashboardTrackImageURL, size: 126)
+                                HTMLSummaryText(rawHTML: artistSummaryText, fontSize: 15, lineLimit: 6)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
+
+                            HStack(spacing: 0) {
+                                statColumn("Listeners", scrobbleService.currentArtistDetails?.listeners)
+                                statColumn("Plays", scrobbleService.currentArtistDetails?.playcount)
+                                statColumn("Plays in your library", scrobbleService.currentTrackDetails?.userPlaycount)
+                            }
+                            .overlay {
+                                HStack {
+                                    Divider().frame(height: 36)
+                                    Spacer()
+                                    Divider().frame(height: 36)
+                                }
+                                .padding(.horizontal, 12)
+                                .opacity(0.35)
+                            }
+
+                            if let tags = scrobbleService.currentArtistDetails?.tags, !tags.isEmpty {
+                                tagLinks(title: "Popular tags", tags: Array(tags.prefix(6)))
+                            }
+
+                            if let similar = scrobbleService.currentArtistDetails?.similarArtists, !similar.isEmpty {
+                                VStack(alignment: .leading, spacing: 8) {
+                                    Text("Similar Artists")
+                                        .font(.custom("Avenir Next Demi Bold", size: 18))
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 18) {
+                                            ForEach(similar.prefix(6), id: \.name) { item in
+                                                similarArtistLink(item)
                                             }
                                         }
                                     }
@@ -519,11 +593,15 @@ private struct DashboardView: View {
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(22)
-                    .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .background {
+                        dashboardBackgroundArt(dashboardHeroImageURL)
+                    }
+                    .background(dashboardCardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
                     .overlay(
                         RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                            .strokeBorder(cardBorderColor, lineWidth: 1)
                     )
+                    .animation(.easeInOut(duration: 0.45), value: moodPalette)
                 } else {
                     Text("No track detected.")
                         .font(.custom("Avenir Next Medium", size: 14))
@@ -531,15 +609,20 @@ private struct DashboardView: View {
                         .padding(20)
                         .appPanelStyle()
                 }
-
-                HStack(spacing: 12) {
-                    MetricCard(title: "Queued", value: "\(scrobbleService.queuedScrobbles.count)", icon: "shippingbox")
-                    MetricCard(title: "Failures", value: "\(scrobbleService.queueSubmitFailures)", icon: "exclamationmark.triangle")
-                    MetricCard(title: "Events", value: "\(scrobbleService.playerEventCount)", icon: "waveform")
-                }
-                .animation(.spring(response: 0.35, dampingFraction: 0.82), value: scrobbleService.queuedScrobbles.count)
             }
             .padding(24)
+        }
+        .task(id: dashboardMoodKey) {
+            let palette = await MoodPaletteEngine.resolvePalette(
+                trackTags: scrobbleService.currentTrackDetails?.tags ?? [],
+                artistTags: scrobbleService.currentArtistDetails?.tags ?? [],
+                artworkURL: dashboardHeroImageURL
+            )
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.55)) {
+                    moodPalette = palette
+                }
+            }
         }
     }
 
@@ -551,14 +634,14 @@ private struct DashboardView: View {
                 case let .success(image):
                     image.resizable().scaledToFill()
                 default:
-                    Color.white.opacity(0.06)
+                    placeholderFill
                 }
             }
             .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
         } else {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
-                .fill(Color.white.opacity(0.06))
+                .fill(placeholderFill)
                 .frame(width: size, height: size)
         }
     }
@@ -566,6 +649,19 @@ private struct DashboardView: View {
     @ViewBuilder
     private func dashboardBackgroundArt(_ urlString: String?) -> some View {
         ZStack {
+            LinearGradient(
+                colors: colorScheme == .dark
+                    ? [
+                        Color(nsColor: moodPalette.gradientStart),
+                        Color(nsColor: moodPalette.gradientEnd)
+                    ]
+                    : [
+                        Color(nsColor: moodPalette.gradientStart).opacity(0.22),
+                        Color(nsColor: moodPalette.gradientEnd).opacity(0.14)
+                    ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
             if let urlString, let url = URL(string: urlString) {
                 AsyncImage(url: url) { phase in
                     switch phase {
@@ -574,26 +670,35 @@ private struct DashboardView: View {
                             .resizable()
                             .scaledToFill()
                             .blur(radius: 30)
-                            .saturation(0.65)
-                            .opacity(0.42)
+                            .saturation(0.72)
+                            .opacity(colorScheme == .dark ? 0.34 : 0.22)
                     default:
                         Color.clear
                     }
                 }
             }
-            // Subtle bokeh highlights.
+            // The mood engine picks a tag-driven palette and then folds dominant
+            // artwork color back into it, so the backdrop feels responsive to the
+            // current artist without becoming unreadable.
             Circle()
-                .fill(Color.white.opacity(0.09))
-                .frame(width: 260, height: 260)
-                .blur(radius: 22)
+                .fill(Color(nsColor: moodPalette.glowPrimary).opacity(colorScheme == .dark ? 0.22 : 0.18))
+                .frame(width: 280, height: 280)
+                .blur(radius: 28)
                 .offset(x: 160, y: -80)
             Circle()
-                .fill(Color.blue.opacity(0.14))
-                .frame(width: 220, height: 220)
-                .blur(radius: 18)
+                .fill(Color(nsColor: moodPalette.glowSecondary).opacity(colorScheme == .dark ? 0.18 : 0.14))
+                .frame(width: 240, height: 240)
+                .blur(radius: 22)
                 .offset(x: -180, y: 60)
+            Circle()
+                .fill(Color(nsColor: moodPalette.accent).opacity(colorScheme == .dark ? 0.10 : 0.08))
+                .frame(width: 180, height: 180)
+                .blur(radius: 20)
+                .offset(x: 40, y: 120)
             LinearGradient(
-                colors: [Color.black.opacity(0.24), Color.black.opacity(0.52)],
+                colors: colorScheme == .dark
+                    ? [Color.black.opacity(0.24), Color.black.opacity(0.52)]
+                    : [Color.white.opacity(0.24), Color.white.opacity(0.62)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -610,7 +715,7 @@ private struct DashboardView: View {
             .foregroundStyle(scrobbleService.playbackState == "Playing" ? .green : .secondary)
             .background(
                 (scrobbleService.playbackState == "Playing" ? Color.green : Color.white)
-                    .opacity(0.12),
+                    .opacity(colorScheme == .dark ? 0.12 : 0.18),
                 in: Capsule()
             )
     }
@@ -634,7 +739,7 @@ private struct DashboardView: View {
             .font(.custom("Avenir Next Medium", size: 14))
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 9, style: .continuous))
+            .background(calloutBackground, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
     }
 
     private var artistSummaryText: String {
@@ -668,6 +773,16 @@ private struct DashboardView: View {
         scrobbleService.currentArtistDetails?.imageURL ?? dashboardTrackImageURL
     }
 
+    private var dashboardMoodKey: String {
+        [
+            scrobbleService.currentTrack?.title ?? "",
+            scrobbleService.currentTrack?.artist ?? "",
+            dashboardHeroImageURL ?? "",
+            (scrobbleService.currentTrackDetails?.tags ?? []).joined(separator: "|"),
+            (scrobbleService.currentArtistDetails?.tags ?? []).joined(separator: "|")
+        ].joined(separator: "::")
+    }
+
     private var dashboardTrackImageURL: String? {
         // Artwork resolution chain:
         // 1) track.getInfo image
@@ -693,6 +808,72 @@ private struct DashboardView: View {
 
     private func count(_ value: Int?) -> String {
         value.map { $0.formatted() } ?? "—"
+    }
+
+    private func tagLinks(title: String, tags: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.custom("Avenir Next Medium", size: 13))
+                .foregroundStyle(.secondary)
+            FlowLayout(spacing: 6) {
+                ForEach(tags, id: \.self) { tag in
+                    Link(tag, destination: lastfmTagURL(tag))
+                        .font(.custom("Avenir Next Medium", size: 13))
+                }
+            }
+        }
+    }
+
+    private func similarArtistLink(_ similar: LastfmSimilarArtist) -> some View {
+        Button {
+            openURL(lastfmArtistURL(name: similar.name, fallback: similar.url))
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                dashboardArt(similar.imageURL, size: 72)
+                Text(similar.name)
+                    .font(.custom("Avenir Next Medium", size: 14))
+                    .lineLimit(1)
+                    .frame(width: 90, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func lastfmTagURL(_ tag: String) -> URL {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encoded = tag.addingPercentEncoding(withAllowedCharacters: allowed) ?? tag
+        return URL(string: "https://www.last.fm/tag/\(encoded)")!
+    }
+
+    private func lastfmArtistURL(name: String, fallback: String?) -> URL {
+        if let fallback, let url = URL(string: fallback) {
+            return url
+        }
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encoded = name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name
+        return URL(string: "https://www.last.fm/music/\(encoded)")!
+    }
+
+    private var placeholderFill: Color {
+        colorScheme == .dark ? Color.white.opacity(0.06) : Color.black.opacity(0.06)
+    }
+
+    private var cardBorderColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.08)
+    }
+
+    private var dashboardCardBackground: AnyShapeStyle {
+        colorScheme == .dark ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.72))
+    }
+
+    private var calloutBackground: Color {
+        colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.05)
+    }
+
+    private var sectionDividerColor: Color {
+        colorScheme == .dark ? Color.white.opacity(0.10) : Color.black.opacity(0.10)
     }
 }
 
@@ -783,7 +964,7 @@ private struct AccountView: View {
                     Text("Auth State: \(scrobbleService.isAuthenticated ? "Authenticated" : "Not authenticated")")
                     Text("Session: \(scrobbleService.sessionStatus)")
                     Text("Capabilities: \(scrobbleService.capabilitiesStatus)")
-                    Text("Operational errors: Tools > Diagnostics")
+                    Text("Operational state: Preferences > Advanced")
                         .foregroundStyle(.secondary)
                 }
                 .font(.custom("Avenir Next Medium", size: 13))
@@ -798,6 +979,8 @@ private struct AccountView: View {
                 }
             }
             .padding(24)
+            .frame(maxWidth: 1280, alignment: .leading)
+            .frame(maxWidth: .infinity)
         }
     }
 }
@@ -847,10 +1030,7 @@ private struct ExploreView: View {
                             }
                         }
                         if let summary = track.summary {
-                            Text(summary)
-                                .font(.custom("Avenir Next Regular", size: 12))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(4)
+                            HTMLSummaryText(rawHTML: summary, fontSize: 12, lineLimit: 4)
                         }
                     }
                     .appPanelStyle()
@@ -882,10 +1062,7 @@ private struct ExploreView: View {
                             }
                         }
                         if let summary = artist.summary {
-                            Text(summary)
-                                .font(.custom("Avenir Next Regular", size: 12))
-                                .foregroundStyle(.secondary)
-                                .lineLimit(5)
+                            HTMLSummaryText(rawHTML: summary, fontSize: 12, lineLimit: 5)
                         }
                         if !artist.similarArtists.isEmpty {
                             Text("Similar Artists")
@@ -1376,88 +1553,167 @@ private struct ScrobblesView: View {
 
 private struct ScrobbleDetailPanel: View {
     @EnvironmentObject private var scrobbleService: ScrobbleService
+    @Environment(\.openURL) private var openURL
     let item: LastfmRecentScrobble
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("Track Detail")
-                    .font(.custom("Avenir Next Demi Bold", size: 24))
-                Spacer()
-                Text(scrobbleService.inspectStatus)
-                    .font(.custom("Avenir Next Medium", size: 12))
-                    .foregroundStyle(.secondary)
-            }
+        GeometryReader { geo in
+            let metrics = DetailPanelMetrics(width: geo.size.width)
 
-            HStack(alignment: .top, spacing: 12) {
-                artwork
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(item.track)
-                        .font(.custom("Avenir Next Demi Bold", size: 26))
-                    Text("by \(item.artist)")
-                        .font(.custom("Avenir Next Medium", size: 20))
-                    if let album = scrobbleService.inspectedTrackDetails?.album {
-                        Text("from \(album)")
-                            .font(.custom("Avenir Next Medium", size: 16))
+            ScrollView {
+                VStack(alignment: .leading, spacing: metrics.sectionSpacing) {
+                    HStack {
+                        Text("Track Detail")
+                            .font(.custom("Avenir Next Demi Bold", size: metrics.headerFont))
+                        Spacer()
+                        Text(scrobbleService.inspectStatus)
+                            .font(.custom("Avenir Next Medium", size: 12))
                             .foregroundStyle(.secondary)
                     }
-                }
-                Spacer()
-            }
 
-            if let track = scrobbleService.inspectedTrackDetails {
-                HStack(spacing: 18) {
-                    stat("Listeners", track.listeners)
-                    stat("Plays", track.playcount)
-                    stat("In your library", track.userPlaycount)
-                }
-                if !track.tags.isEmpty {
-                    Text("Popular tags: \(track.tags.prefix(7).joined(separator: " · "))")
-                        .font(.custom("Avenir Next Medium", size: 13))
-                        .foregroundStyle(.secondary)
-                }
-            }
+                    trackHeader(metrics: metrics)
 
-            if let artist = scrobbleService.inspectedArtistDetails {
-                Divider()
-                Text(artist.name)
-                    .font(.custom("Avenir Next Demi Bold", size: 32))
-                HStack(alignment: .top, spacing: 12) {
-                    artistArt(artist.imageURL)
-                    Text(artist.summary ?? "No artist biography available.")
-                        .font(.custom("Avenir Next Regular", size: 14))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                HStack(spacing: 18) {
-                    stat("Listeners", artist.listeners)
-                    stat("Plays", artist.playcount)
-                    stat("In your library", artist.userPlaycount)
-                }
-                if !artist.tags.isEmpty {
-                    Text("Tags: \(artist.tags.prefix(10).joined(separator: " · "))")
-                        .font(.custom("Avenir Next Medium", size: 13))
-                        .foregroundStyle(.secondary)
-                }
-                if !artist.similarArtists.isEmpty {
-                    Text("Similar Artists")
-                        .font(.custom("Avenir Next Medium", size: 17))
-                    HStack(spacing: 16) {
-                        ForEach(artist.similarArtists.prefix(4)) { similar in
-                            VStack(alignment: .leading, spacing: 4) {
-                                artistArt(similar.imageURL, size: 74)
-                                Text(similar.name)
-                                    .font(.custom("Avenir Next Regular", size: 12))
-                                    .lineLimit(1)
-                            }
+                    if let track = scrobbleService.inspectedTrackDetails {
+                        statGrid(
+                            listeners: track.listeners,
+                            plays: track.playcount,
+                            library: track.userPlaycount,
+                            compact: metrics.isCompact
+                        )
+                        if !track.tags.isEmpty {
+                            tagLinks(title: "Popular tags", tags: Array(track.tags.prefix(7)))
+                        }
+                    }
+
+                    if let artist = scrobbleService.inspectedArtistDetails {
+                        Divider()
+                        Text(artist.name)
+                            .font(.custom("Avenir Next Demi Bold", size: metrics.artistTitleFont))
+                            .fixedSize(horizontal: false, vertical: true)
+
+                        artistSection(artist, metrics: metrics)
+
+                        statGrid(
+                            listeners: artist.listeners,
+                            plays: artist.playcount,
+                            library: artist.userPlaycount,
+                            compact: metrics.isCompact
+                        )
+                        if !artist.tags.isEmpty {
+                            tagLinks(title: "Tags", tags: Array(artist.tags.prefix(10)))
+                        }
+                        if !artist.similarArtists.isEmpty {
+                            Text("Similar Artists")
+                                .font(.custom("Avenir Next Medium", size: 17))
+                            similarArtistsGrid(artist.similarArtists, compact: metrics.isCompact)
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.trailing, 4)
+            }
+        }
+    }
+
+    // Apple’s current adaptive-layout guidance favors reflow over brute-force
+    // shrinking: keep hierarchy intact, switch arrangement when width becomes
+    // constrained, and only scale typography within safe bounds. This panel
+    // follows that approach by collapsing from a side-by-side inspector into a
+    // stacked detail layout before text becomes unreadably narrow.
+    // References:
+    // Apple. (n.d.). ViewThatFits. https://developer.apple.com/documentation/swiftui/viewthatfits
+    // Apple. (n.d.). Human Interface Guidelines. https://developer.apple.com/design/human-interface-guidelines/
+    private struct DetailPanelMetrics {
+        let width: CGFloat
+
+        var isCompact: Bool { width < 660 }
+        var artworkSize: CGFloat { isCompact ? min(220, max(150, width - 48)) : 180 }
+        var headerFont: CGFloat { isCompact ? 20 : 24 }
+        var titleFont: CGFloat { isCompact ? 22 : 26 }
+        var subtitleFont: CGFloat { isCompact ? 16 : 20 }
+        var albumFont: CGFloat { isCompact ? 14 : 16 }
+        var artistTitleFont: CGFloat { isCompact ? 26 : 32 }
+        var sectionSpacing: CGFloat { isCompact ? 10 : 12 }
+        var stackSpacing: CGFloat { isCompact ? 10 : 12 }
+    }
+
+    @ViewBuilder
+    private func trackHeader(metrics: DetailPanelMetrics) -> some View {
+        if metrics.isCompact {
+            VStack(alignment: .leading, spacing: metrics.stackSpacing) {
+                artwork(size: metrics.artworkSize)
+                trackTextBlock(metrics: metrics)
+            }
+        } else {
+            HStack(alignment: .top, spacing: metrics.stackSpacing) {
+                artwork(size: metrics.artworkSize)
+                trackTextBlock(metrics: metrics)
+                Spacer(minLength: 0)
+            }
+        }
+    }
+
+    private func trackTextBlock(metrics: DetailPanelMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(item.track)
+                .font(.custom("Avenir Next Demi Bold", size: metrics.titleFont))
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+            Text("by \(item.artist)")
+                .font(.custom("Avenir Next Medium", size: metrics.subtitleFont))
+                .fixedSize(horizontal: false, vertical: true)
+            if let album = scrobbleService.inspectedTrackDetails?.album {
+                Text("from \(album)")
+                    .font(.custom("Avenir Next Medium", size: metrics.albumFont))
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
     }
 
     @ViewBuilder
-    private var artwork: some View {
+    private func artistSection(_ artist: LastfmArtistDetails, metrics: DetailPanelMetrics) -> some View {
+        if metrics.isCompact {
+            VStack(alignment: .leading, spacing: metrics.stackSpacing) {
+                artistArt(artist.imageURL, size: metrics.artworkSize)
+                HTMLSummaryText(rawHTML: artist.summary ?? "No artist biography available.", fontSize: 14)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        } else {
+            HStack(alignment: .top, spacing: metrics.stackSpacing) {
+                artistArt(artist.imageURL)
+                HTMLSummaryText(rawHTML: artist.summary ?? "No artist biography available.", fontSize: 14)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func statGrid(listeners: Int?, plays: Int?, library: Int?, compact: Bool) -> some View {
+        let columns = compact
+            ? [GridItem(.adaptive(minimum: 132), alignment: .leading)]
+            : [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+            stat("Listeners", listeners)
+            stat("Plays", plays)
+            stat("In your library", library)
+        }
+    }
+
+    private func similarArtistsGrid(_ artists: [LastfmSimilarArtist], compact: Bool) -> some View {
+        let columns = compact
+            ? [GridItem(.adaptive(minimum: 88), spacing: 14, alignment: .topLeading)]
+            : [GridItem(.adaptive(minimum: 90), spacing: 16, alignment: .topLeading)]
+
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+            ForEach(artists.prefix(compact ? 6 : 8)) { similar in
+                similarArtistLink(similar)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func artwork(size: CGFloat = 180) -> some View {
         if let urlString = scrobbleService.inspectedTrackDetails?.imageURL ?? item.imageURL,
            let url = URL(string: urlString) {
             AsyncImage(url: url) { phase in
@@ -1468,12 +1724,12 @@ private struct ScrobbleDetailPanel: View {
                     Color.white.opacity(0.06)
                 }
             }
-            .frame(width: 180, height: 180)
+            .frame(width: size, height: size)
             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
         } else {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
                 .fill(Color.white.opacity(0.06))
-                .frame(width: 180, height: 180)
+                .frame(width: size, height: size)
         }
     }
 
@@ -1505,6 +1761,138 @@ private struct ScrobbleDetailPanel: View {
                 .font(.custom("Avenir Next Medium", size: 12))
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private func tagLinks(title: String, tags: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title)
+                .font(.custom("Avenir Next Medium", size: 13))
+                .foregroundStyle(.secondary)
+            FlowLayout(spacing: 6) {
+                ForEach(tags, id: \.self) { tag in
+                    Link(tag, destination: lastfmTagURL(tag))
+                        .font(.custom("Avenir Next Medium", size: 13))
+                }
+            }
+        }
+    }
+
+    private func similarArtistLink(_ similar: LastfmSimilarArtist) -> some View {
+        Button {
+            openURL(lastfmArtistURL(name: similar.name, fallback: similar.url))
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                artistArt(similar.imageURL, size: 74)
+                Text(similar.name)
+                    .font(.custom("Avenir Next Regular", size: 12))
+                    .lineLimit(1)
+                    .frame(width: 74, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func lastfmTagURL(_ tag: String) -> URL {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encoded = tag.addingPercentEncoding(withAllowedCharacters: allowed) ?? tag
+        return URL(string: "https://www.last.fm/tag/\(encoded)")!
+    }
+
+    private func lastfmArtistURL(name: String, fallback: String?) -> URL {
+        if let fallback, let url = URL(string: fallback) {
+            return url
+        }
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encoded = name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name
+        return URL(string: "https://www.last.fm/music/\(encoded)")!
+    }
+}
+
+private struct FlowLayout: Layout {
+    var spacing: CGFloat = 8
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let maxWidth = proposal.width ?? 400
+        var currentX: CGFloat = 0
+        var currentY: CGFloat = 0
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > maxWidth, currentX > 0 {
+                currentX = 0
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+
+        return CGSize(width: maxWidth, height: currentY + lineHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var currentX = bounds.minX
+        var currentY = bounds.minY
+        var lineHeight: CGFloat = 0
+
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if currentX + size.width > bounds.maxX, currentX > bounds.minX {
+                currentX = bounds.minX
+                currentY += lineHeight + spacing
+                lineHeight = 0
+            }
+            subview.place(
+                at: CGPoint(x: currentX, y: currentY),
+                proposal: ProposedViewSize(width: size.width, height: size.height)
+            )
+            currentX += size.width + spacing
+            lineHeight = max(lineHeight, size.height)
+        }
+    }
+}
+
+private struct InspectorResizeHandle: View {
+    @Binding var width: Double
+    let minimum: CGFloat
+    let maximum: CGFloat
+    @State private var dragBaseWidth: Double?
+
+    var body: some View {
+        ZStack {
+            Rectangle()
+                .fill(.clear)
+                .frame(width: 14)
+                .contentShape(Rectangle())
+
+            Capsule(style: .continuous)
+                .fill(Color.secondary.opacity(0.25))
+                .frame(width: 4, height: 54)
+        }
+        .onHover { hovering in
+            if hovering {
+                NSCursor.resizeLeftRight.push()
+            } else {
+                NSCursor.pop()
+            }
+        }
+        .gesture(
+            DragGesture(minimumDistance: 2)
+                .onChanged { value in
+                    let base = dragBaseWidth ?? width
+                    dragBaseWidth = base
+                    let candidate = base - value.translation.width
+                    width = min(max(candidate, Double(minimum)), Double(maximum))
+                }
+                .onEnded { _ in
+                    dragBaseWidth = nil
+                    width = min(max(width, Double(minimum)), Double(maximum))
+                }
+        )
+        .accessibilityLabel("Resize inspector")
     }
 }
 
@@ -3019,62 +3407,145 @@ private struct AnimatedAvatarImage: NSViewRepresentable {
     }
 }
 
-private struct MetricCard: View {
-    let title: String
-    let value: String
-    let icon: String
+private struct AppBackdrop: View {
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        HStack(alignment: .firstTextBaseline, spacing: 10) {
-            Image(systemName: icon)
-                .foregroundStyle(.orange)
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.custom("Avenir Next Medium", size: 12))
-                    .foregroundStyle(.secondary)
-                Text(value)
-                    .font(.custom("Avenir Next Medium", size: 20))
+        GeometryReader { proxy in
+            let glyphWidth = min(proxy.size.width * 0.50, 860)
+            let glyphHeight = glyphWidth * 0.62
+
+            ZStack {
+                LinearGradient(
+                    colors: colorScheme == .dark
+                        ? [
+                            Color(red: 0.10, green: 0.10, blue: 0.11),
+                            Color(red: 0.05, green: 0.05, blue: 0.06)
+                        ]
+                        : [
+                            Color(red: 0.97, green: 0.96, blue: 0.95),
+                            Color(red: 0.93, green: 0.92, blue: 0.90)
+                        ],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+
+                RadialGradient(
+                    colors: colorScheme == .dark
+                        ? [Color(red: 0.83, green: 0.06, blue: 0.09).opacity(0.22), .clear]
+                        : [Color(red: 0.83, green: 0.06, blue: 0.09).opacity(0.12), .clear],
+                    center: .topLeading,
+                    startRadius: 40,
+                    endRadius: 520
+                )
+                .offset(x: -120, y: -80)
+
+                RadialGradient(
+                    colors: colorScheme == .dark
+                        ? [Color.white.opacity(0.05), .clear]
+                        : [Color.white.opacity(0.18), .clear],
+                    center: .center,
+                    startRadius: 40,
+                    endRadius: 420
+                )
+                .offset(x: 220, y: -120)
+
+                backdropGlyph(
+                    color: colorScheme == .dark
+                        ? Color(red: 0.83, green: 0.06, blue: 0.09).opacity(0.16)
+                        : Color(red: 0.83, green: 0.06, blue: 0.09).opacity(0.09),
+                    width: glyphWidth,
+                    height: glyphHeight
+                )
+                .offset(x: -proxy.size.width * 0.10, y: -proxy.size.height * 0.08)
+
+                backdropGlyph(
+                    color: colorScheme == .dark
+                        ? Color.white.opacity(0.04)
+                        : Color.black.opacity(0.035),
+                    width: glyphWidth * 0.92,
+                    height: glyphHeight * 0.92
+                )
+                .offset(x: -proxy.size.width * 0.085, y: -proxy.size.height * 0.06)
             }
-            Spacer()
+            .ignoresSafeArea()
         }
-        .padding(12)
-        .appPanelStyle()
+    }
+
+    private func backdropGlyph(color: Color, width: CGFloat, height: CGFloat) -> some View {
+        // Use a scalable text-based mark here instead of the 18x18 menu bar bitmap.
+        // The tray asset is intentionally tiny; blowing it up for the app backdrop
+        // creates visible pixelation on large windows.
+        Text("as")
+            .font(.custom("Avenir Next Heavy", size: width * 0.68))
+            .italic()
+            .tracking(-width * 0.035)
+            .foregroundStyle(color)
+            .frame(width: width, height: height, alignment: .center)
+            .minimumScaleFactor(0.7)
+            .blur(radius: colorScheme == .dark ? 24 : 20)
+            .drawingGroup()
     }
 }
 
-private struct AppBackdrop: View {
+private struct HTMLSummaryText: View {
+    let rawHTML: String
+    let fontSize: CGFloat
+    var lineLimit: Int? = nil
+
     var body: some View {
-        ZStack {
-            LinearGradient(
-                colors: [Color(red: 0.10, green: 0.13, blue: 0.18), Color(red: 0.05, green: 0.06, blue: 0.09)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-
-            Circle()
-                .fill(Color.orange.opacity(0.18))
-                .frame(width: 420, height: 420)
-                .offset(x: -240, y: -260)
-                .blur(radius: 2)
-
-            Circle()
-                .fill(Color.blue.opacity(0.14))
-                .frame(width: 360, height: 360)
-                .offset(x: 300, y: -180)
-                .blur(radius: 6)
+        Group {
+            if let attributed = htmlSummaryAttributedString(from: rawHTML) {
+                Text(attributed)
+            } else {
+                Text(rawHTML)
+            }
         }
+        .font(.custom("Avenir Next Regular", size: fontSize))
+        .foregroundStyle(.secondary)
+        .lineLimit(lineLimit)
+        .tint(.accentColor)
+        .textSelection(.enabled)
+    }
+
+    private func htmlSummaryAttributedString(from rawHTML: String) -> AttributedString? {
+        guard let data = rawHTML.data(using: .utf8) else { return nil }
+        let options: [NSAttributedString.DocumentReadingOptionKey: Any] = [
+            .documentType: NSAttributedString.DocumentType.html,
+            .characterEncoding: String.Encoding.utf8.rawValue
+        ]
+        guard let nsAttributed = try? NSAttributedString(data: data, options: options, documentAttributes: nil),
+              let attributed = try? AttributedString(nsAttributed, including: AttributeScopes.FoundationAttributes.self) else {
+            return nil
+        }
+        return attributed
     }
 }
 
 private extension View {
     func appPanelStyle() -> some View {
-        self
+        modifier(AppPanelModifier())
+    }
+}
+
+private struct AppPanelModifier: ViewModifier {
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content
             .padding()
-            .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .background(panelBackground, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.08), lineWidth: 1)
+                    .strokeBorder(panelBorder, lineWidth: 1)
             )
+    }
+
+    private var panelBackground: AnyShapeStyle {
+        colorScheme == .dark ? AnyShapeStyle(.ultraThinMaterial) : AnyShapeStyle(Color.white.opacity(0.72))
+    }
+
+    private var panelBorder: Color {
+        colorScheme == .dark ? Color.white.opacity(0.08) : Color.black.opacity(0.08)
     }
 }
