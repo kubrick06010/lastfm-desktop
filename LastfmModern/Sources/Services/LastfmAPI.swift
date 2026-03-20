@@ -29,6 +29,8 @@ protocol LastfmAPI {
     func unlove(track: String, artist: String) async throws
     func fetchTrackDetails(artist: String, track: String) async throws -> LastfmTrackDetails
     func fetchArtistDetails(artist: String) async throws -> LastfmArtistDetails
+    func fetchSimilarTracks(artist: String, track: String, limit: Int) async throws -> [LastfmSimilarTrack]
+    func fetchSimilarAlbums(artist: String, album: String, limit: Int) async throws -> [LastfmSimilarAlbum]
     func fetchUserProfile() async throws -> LastfmUserProfile
     func fetchRecentScrobbles(limit: Int) async throws -> [LastfmRecentScrobble]
     func fetchFriendsListening(limit: Int) async throws -> [LastfmFriendListening]
@@ -129,6 +131,22 @@ struct LastfmTrackDetails: Equatable {
     let url: String?
     let summary: String?
     let tags: [String]
+}
+
+struct LastfmSimilarTrack: Equatable, Identifiable {
+    let id: String
+    let name: String
+    let artist: String
+    let imageURL: String?
+    let url: String?
+}
+
+struct LastfmSimilarAlbum: Equatable, Identifiable {
+    let id: String
+    let name: String
+    let artist: String
+    let imageURL: String?
+    let url: String?
 }
 
 struct LastfmSimilarArtist: Equatable, Identifiable {
@@ -536,6 +554,44 @@ final class LastfmAPIClient: LastfmAPI {
                 )
             }
         )
+    }
+
+    func fetchSimilarTracks(artist: String, track: String, limit: Int = 8) async throws -> [LastfmSimilarTrack] {
+        let cappedLimit = min(max(1, limit), 24)
+        let params: [String: String] = [
+            "method": "track.getSimilar",
+            "artist": artist,
+            "track": track,
+            "limit": String(cappedLimit),
+            "autocorrect": "1"
+        ]
+
+        do {
+            let payload = try await sendPublicRead(
+                params: params,
+                cachePolicy: .ttl(seconds: 900, staleFallbackSeconds: 86_400)
+            ).payload
+            guard let similarData = payload["similartracks"] as? [String: Any] else {
+                return []
+            }
+            return Array(users(from: similarData["track"]).prefix(cappedLimit)).map { item in
+                let name = firstString(item["name"]) ?? "Unknown Track"
+                let artistName = firstString((item["artist"] as? [String: Any])?["name"]) ?? firstString(item["artist"]) ?? "Unknown Artist"
+                return LastfmSimilarTrack(
+                    id: "\(artistName)|\(name)",
+                    name: name,
+                    artist: artistName,
+                    imageURL: imageURL(item["image"]),
+                    url: firstString(item["url"])
+                )
+            }
+        } catch {
+            return try await scrapeSimilarTracksFromWeb(artist: artist, track: track, limit: cappedLimit)
+        }
+    }
+
+    func fetchSimilarAlbums(artist: String, album: String, limit: Int = 8) async throws -> [LastfmSimilarAlbum] {
+        try await scrapeSimilarAlbumsFromWeb(artist: artist, album: album, limit: min(max(1, limit), 12))
     }
 
     func fetchUserProfile() async throws -> LastfmUserProfile {
@@ -1212,6 +1268,80 @@ final class LastfmAPIClient: LastfmAPI {
         return output
     }
 
+    private func scrapeSimilarTracksFromWeb(artist: String, track: String, limit: Int) async throws -> [LastfmSimilarTrack] {
+        let pageURL = try lastfmTrackPageURL(artist: artist, track: track)
+        let html = try await fetchPublicHTML(from: pageURL)
+        let pattern = #"<li class="[^"]*track-similar-tracks-item-wrap[^"]*"[\s\S]*?<h3 class="track-similar-tracks-item-name"[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>[\s\S]*?<p class="track-similar-tracks-item-artist"[\s\S]*?<a[^>]*>(.*?)</a>[\s\S]*?<span class="track-similar-tracks-item-image cover-art">[\s\S]*?<img[^>]*src="([^"]+)""#
+        let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        var output: [LastfmSimilarTrack] = []
+
+        for match in regex.matches(in: html, options: [], range: range) {
+            guard match.numberOfRanges >= 5,
+                  let urlRange = Range(match.range(at: 1), in: html),
+                  let nameRange = Range(match.range(at: 2), in: html),
+                  let artistRange = Range(match.range(at: 3), in: html),
+                  let imageRange = Range(match.range(at: 4), in: html) else {
+                continue
+            }
+            let name = htmlDecodedString(String(html[nameRange])).trimmingCharacters(in: .whitespacesAndNewlines)
+            let artistName = htmlDecodedString(String(html[artistRange])).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, !artistName.isEmpty else { continue }
+            let rawURL = String(html[urlRange])
+            let resolvedURL = rawURL.hasPrefix("http") ? rawURL : "https://www.last.fm\(rawURL)"
+            output.append(
+                LastfmSimilarTrack(
+                    id: "\(artistName)|\(name)",
+                    name: name,
+                    artist: artistName,
+                    imageURL: normalizedImageCandidate(String(html[imageRange])),
+                    url: resolvedURL
+                )
+            )
+            if output.count >= limit {
+                break
+            }
+        }
+        return output
+    }
+
+    private func scrapeSimilarAlbumsFromWeb(artist: String, album: String, limit: Int) async throws -> [LastfmSimilarAlbum] {
+        let pageURL = try lastfmAlbumPageURL(artist: artist, album: album)
+        let html = try await fetchPublicHTML(from: pageURL)
+        let pattern = #"<li class="[^"]*similar-albums-item-wrap[^"]*"[\s\S]*?<h3 class="similar-albums-item-name"[^>]*>\s*<a[^>]*href="([^"]+)"[^>]*>(.*?)</a>[\s\S]*?<p class="similar-albums-item-artist"[\s\S]*?<a[^>]*>(.*?)</a>[\s\S]*?<span class="similar-albums-item-image cover-art">[\s\S]*?<img[^>]*src="([^"]+)""#
+        let regex = try NSRegularExpression(pattern: pattern, options: [.caseInsensitive])
+        let range = NSRange(html.startIndex..<html.endIndex, in: html)
+        var output: [LastfmSimilarAlbum] = []
+
+        for match in regex.matches(in: html, options: [], range: range) {
+            guard match.numberOfRanges >= 5,
+                  let urlRange = Range(match.range(at: 1), in: html),
+                  let nameRange = Range(match.range(at: 2), in: html),
+                  let artistRange = Range(match.range(at: 3), in: html),
+                  let imageRange = Range(match.range(at: 4), in: html) else {
+                continue
+            }
+            let name = htmlDecodedString(String(html[nameRange])).trimmingCharacters(in: .whitespacesAndNewlines)
+            let artistName = htmlDecodedString(String(html[artistRange])).trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !name.isEmpty, !artistName.isEmpty else { continue }
+            let rawURL = String(html[urlRange])
+            let resolvedURL = rawURL.hasPrefix("http") ? rawURL : "https://www.last.fm\(rawURL)"
+            output.append(
+                LastfmSimilarAlbum(
+                    id: "\(artistName)|\(name)",
+                    name: name,
+                    artist: artistName,
+                    imageURL: normalizedImageCandidate(String(html[imageRange])),
+                    url: resolvedURL
+                )
+            )
+            if output.count >= limit {
+                break
+            }
+        }
+        return output
+    }
+
     private func extractedNeighbourMatch(
         from html: String,
         match: NSTextCheckingResult,
@@ -1239,6 +1369,53 @@ final class LastfmAPIClient: LastfmAPI {
         // Neighbours are ordered by affinity on Last.fm, so rank is a
         // reasonable fallback score when explicit percentages are unavailable.
         return max(0.2, min(0.95, 0.95 - (normalized * 0.65)))
+    }
+
+    private func fetchPublicHTML(from url: URL) async throws -> String {
+        var request = URLRequest(url: url)
+        request.httpMethod = "GET"
+        request.setValue("text/html,application/xhtml+xml", forHTTPHeaderField: "Accept")
+        request.setValue("LastfmModern/1.0", forHTTPHeaderField: "User-Agent")
+
+        do {
+            let (data, _) = try await activeURLSession.data(for: request)
+            guard let html = String(data: data, encoding: .utf8), !html.isEmpty else {
+                throw LastfmAPIError.invalidResponse
+            }
+            return html
+        } catch {
+            if let urlError = error as? URLError {
+                switch urlError.code {
+                case .notConnectedToInternet, .networkConnectionLost, .timedOut, .cannotFindHost, .cannotConnectToHost:
+                    throw LastfmAPIError.networkUnavailable
+                default:
+                    throw LastfmAPIError.transport
+                }
+            }
+            throw LastfmAPIError.transport
+        }
+    }
+
+    private func lastfmTrackPageURL(artist: String, track: String) throws -> URL {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let artistPath = artist.addingPercentEncoding(withAllowedCharacters: allowed) ?? artist
+        let trackPath = track.addingPercentEncoding(withAllowedCharacters: allowed) ?? track
+        guard let url = URL(string: "https://www.last.fm/music/\(artistPath)/_/\(trackPath)") else {
+            throw LastfmAPIError.invalidResponse
+        }
+        return url
+    }
+
+    private func lastfmAlbumPageURL(artist: String, album: String) throws -> URL {
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let artistPath = artist.addingPercentEncoding(withAllowedCharacters: allowed) ?? artist
+        let albumPath = album.addingPercentEncoding(withAllowedCharacters: allowed) ?? album
+        guard let url = URL(string: "https://www.last.fm/music/\(artistPath)/\(albumPath)") else {
+            throw LastfmAPIError.invalidResponse
+        }
+        return url
     }
 
     private func users(from value: Any?) -> [[String: Any]] {
@@ -1458,6 +1635,21 @@ final class LastfmAPIClient: LastfmAPI {
             }
         }
         return nil
+    }
+
+    private func htmlDecodedString(_ raw: String) -> String {
+        guard let data = "<span>\(raw)</span>".data(using: .utf8),
+              let attributed = try? NSAttributedString(
+                data: data,
+                options: [
+                    .documentType: NSAttributedString.DocumentType.html,
+                    .characterEncoding: String.Encoding.utf8.rawValue
+                ],
+                documentAttributes: nil
+              ) else {
+            return raw
+        }
+        return attributed.string
     }
 
     private func boolValue(_ value: Any?) -> Bool {
@@ -1771,6 +1963,20 @@ final class LastfmAPIStub: LastfmAPI {
             tags: [],
             similarArtists: []
         )
+    }
+
+    func fetchSimilarTracks(artist: String, track: String, limit: Int) async throws -> [LastfmSimilarTrack] {
+        _ = artist
+        _ = track
+        _ = limit
+        return []
+    }
+
+    func fetchSimilarAlbums(artist: String, album: String, limit: Int) async throws -> [LastfmSimilarAlbum] {
+        _ = artist
+        _ = album
+        _ = limit
+        return []
     }
 
     func fetchUserProfile() async throws -> LastfmUserProfile {

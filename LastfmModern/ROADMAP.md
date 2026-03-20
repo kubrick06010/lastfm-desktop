@@ -63,6 +63,10 @@
 - Settings reworked into a sectioned preferences window.
 - Account management, proxy controls, launch at login, and menu bar workflow implemented.
 - Adaptive inspector resizing and mood-reactive dashboard visuals implemented.
+- Contextual detail inspector implemented to match modernized iOS-style navigation semantics:
+  - artist -> similar artists
+  - track -> similar tracks
+  - album -> similar albums
 - Remaining work:
   - broader responsive pass across all tabs
   - VLC integration

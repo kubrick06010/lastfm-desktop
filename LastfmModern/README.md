@@ -58,6 +58,11 @@ xcodebuild \
   - `user.getFriends`
   - `user.getTopArtists`
   - `user.getLovedTracks`
+- Contextual detail inspector behavior:
+  - `Artist Detail` renders artist biography, stats, tags, and similar artists.
+  - `Track Detail` renders track metadata plus similar tracks.
+  - `Album Detail` renders album metadata plus similar albums.
+  - The inspector adapts layout by available width instead of shrinking text indefinitely.
 
 ## Notes and limitations
 

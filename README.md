@@ -19,6 +19,10 @@ Use this for current development.
 
 See full app documentation in [LastfmModern/README.md](/Users/haa/Desktop/projects/lastfm-desktop/LastfmModern/README.md).
 
+Recent UI direction worth noting:
+- The right-hand detail inspector is contextual by entity type and no longer reuses artist-only related content for tracks/albums.
+- Responsive layout work is ongoing, with the inspector already using adaptive breakpoints for narrow, regular, and wide widths.
+
 ## Quick start (macOS)
 
 1. Open and run from Xcode:

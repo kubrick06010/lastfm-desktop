@@ -39,8 +39,15 @@ private enum WorkspaceTab: String, CaseIterable, Hashable, Identifiable {
 }
 
 private struct DeepLinkTarget: Identifiable, Equatable {
+    enum Kind: String, Equatable {
+        case track
+        case artist
+        case album
+    }
+
     let id: String
     let scrobble: LastfmRecentScrobble
+    let kind: Kind
 }
 
 private struct SocialGraphTarget: Identifiable, Equatable {
@@ -130,6 +137,9 @@ struct ContentView: View {
                                 },
                                 onOpenArtist: { artist in
                                     openDeepLink(track: nil, artist: artist)
+                                },
+                                onOpenAlbum: { album, artist, imageURL in
+                                    openAlbumDeepLink(album: album, artist: artist, imageURL: imageURL)
                                 }
                             )
                         case .friends:
@@ -185,8 +195,16 @@ struct ContentView: View {
                                             Spacer()
                                         }
 
-                                        ScrobbleDetailPanel(item: deepLinkTarget.scrobble)
-                                            .appPanelStyle()
+                                        // Pass the resolved inspector width down so the detail panel
+                                        // can reflow against the real container size instead of using
+                                        // a GeometryReader inside a ScrollView, which over-reports width
+                                        // and leads to unreadable two-column layouts on narrower windows.
+                                        ScrobbleDetailPanel(
+                                            item: deepLinkTarget.scrobble,
+                                            kind: deepLinkTarget.kind,
+                                            availableWidth: resolvedDetailWidth - 32
+                                        )
+                                        .appPanelStyle()
                                     }
                                     .padding(16)
                                 }
@@ -362,7 +380,7 @@ struct ContentView: View {
 
     private func openDeepLink(scrobble: LastfmRecentScrobble) {
         withAnimation(.easeInOut(duration: 0.22)) {
-            deepLinkTarget = DeepLinkTarget(id: scrobble.id, scrobble: scrobble)
+            deepLinkTarget = DeepLinkTarget(id: scrobble.id, scrobble: scrobble, kind: .track)
         }
         Task {
             await scrobbleService.inspect(scrobble: scrobble)
@@ -370,9 +388,10 @@ struct ContentView: View {
     }
 
     private func openDeepLink(track: String?, artist: String, imageURL: String? = nil) {
-        let title = track?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false ? track! : artist
+        let hasTrack = track?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false
+        let title = hasTrack ? track! : artist
         let item = LastfmRecentScrobble(
-            id: "deep-\(artist)|\(title)",
+            id: "deep-\(hasTrack ? "track" : "artist")-\(artist)|\(title)",
             track: title,
             artist: artist,
             album: nil,
@@ -382,7 +401,36 @@ struct ContentView: View {
             playedAt: nil,
             nowPlaying: false
         )
-        openDeepLink(scrobble: item)
+        withAnimation(.easeInOut(duration: 0.22)) {
+            deepLinkTarget = DeepLinkTarget(
+                id: item.id,
+                scrobble: item,
+                kind: hasTrack ? .track : .artist
+            )
+        }
+        Task {
+            await scrobbleService.inspect(scrobble: item)
+        }
+    }
+
+    private func openAlbumDeepLink(album: String, artist: String, imageURL: String? = nil) {
+        let item = LastfmRecentScrobble(
+            id: "deep-album-\(artist)|\(album)",
+            track: album,
+            artist: artist,
+            album: album,
+            imageURL: imageURL,
+            url: nil,
+            loved: false,
+            playedAt: nil,
+            nowPlaying: false
+        )
+        withAnimation(.easeInOut(duration: 0.22)) {
+            deepLinkTarget = DeepLinkTarget(id: item.id, scrobble: item, kind: .album)
+        }
+        Task {
+            await scrobbleService.inspect(scrobble: item)
+        }
     }
 
     private func openSocialGraph(for neighbour: LastfmNeighbour) {
@@ -480,137 +528,111 @@ private struct DashboardView: View {
     let onOpenTrackDetail: (_ track: String, _ artist: String, _ imageURL: String?) -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 18) {
-                Text("Listening Dashboard")
-                    .font(.custom("Avenir Next Medium", size: 24))
-                    .foregroundStyle(.primary)
+        GeometryReader { proxy in
+            let metrics = DashboardMetrics(width: proxy.size.width - 48)
 
-                if let nowPlaying = scrobbleService.currentTrack {
-                    VStack(alignment: .leading, spacing: 14) {
-                        HStack {
-                            Label {
-                                Text("Scrobbling from \(nowPlaying.sourceApp ?? "Music")")
-                                    .font(.custom("Avenir Next Medium", size: 15))
-                            } icon: {
-                                Image(systemName: "music.note")
-                                    .font(.system(size: 15, weight: .semibold))
-                            }
-                            Spacer()
-                            dashboardMiniProgress
-                        }
+            ScrollView {
+                VStack(alignment: .leading, spacing: metrics.sectionSpacing) {
+                    Text("Listening Dashboard")
+                        .font(.custom("Avenir Next Medium", size: metrics.screenTitleFont))
+                        .foregroundStyle(.primary)
 
-                        Divider().overlay(sectionDividerColor)
-
-                        HStack(alignment: .top, spacing: 14) {
-                            dashboardArt(dashboardTrackImageURL, size: 132)
-                                .onTapGesture {
-                                    openDetailForCurrentTrack(nowPlaying)
+                    if let nowPlaying = scrobbleService.currentTrack {
+                        VStack(alignment: .leading, spacing: metrics.cardSpacing) {
+                            if metrics.isCompact {
+                                VStack(alignment: .leading, spacing: 10) {
+                                    sourceLabel(nowPlaying)
+                                    dashboardMiniProgress(compact: true)
                                 }
-
-                            VStack(alignment: .leading, spacing: 6) {
-                                Text(scrobbleService.currentTrackDetails?.name ?? nowPlaying.title)
-                                    .font(.custom("Avenir Next Demi Bold", size: 28))
-                                    .lineLimit(3)
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        openDetailForCurrentTrack(nowPlaying)
-                                    }
-                                    .simultaneousGesture(
-                                        MagnificationGesture()
-                                            .onEnded { value in
-                                                guard value > 1.05 else { return }
-                                                openDetailForCurrentTrack(nowPlaying)
-                                            }
-                                    )
-                                Text("by \(scrobbleService.currentTrackDetails?.artist ?? nowPlaying.artist)")
-                                    .font(.custom("Avenir Next Demi Bold", size: 18))
-                                    .foregroundStyle(.secondary)
-                                if let album = scrobbleService.currentTrackDetails?.album ?? nowPlaying.album {
-                                    Text("from \(album)")
-                                        .font(.custom("Avenir Next Medium", size: 14))
-                                        .foregroundStyle(.secondary)
-                                }
-                                HStack(spacing: 14) {
-                                    Image(systemName: "heart")
-                                    Image(systemName: "tag")
-                                    Image(systemName: "square.and.arrow.up")
-                                }
-                                .font(.system(size: 18, weight: .medium))
-                                .foregroundStyle(.secondary)
-                                .padding(.top, 2)
-                            }
-                            Spacer()
-                        }
-
-                        trackInsightsCard
-
-                        Divider().overlay(sectionDividerColor)
-
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text(scrobbleService.currentArtistDetails?.name ?? nowPlaying.artist)
-                                .font(.custom("Avenir Next Demi Bold", size: 22))
-
-                            HStack(alignment: .top, spacing: 14) {
-                                dashboardArt(scrobbleService.currentArtistDetails?.imageURL ?? dashboardTrackImageURL, size: 126)
-                                HTMLSummaryText(rawHTML: artistSummaryText, fontSize: 15, lineLimit: 6)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-
-                            HStack(spacing: 0) {
-                                statColumn("Listeners", scrobbleService.currentArtistDetails?.listeners)
-                                statColumn("Plays", scrobbleService.currentArtistDetails?.playcount)
-                                statColumn("Plays in your library", scrobbleService.currentTrackDetails?.userPlaycount)
-                            }
-                            .overlay {
-                                HStack {
-                                    Divider().frame(height: 36)
+                            } else {
+                                HStack(alignment: .top) {
+                                    sourceLabel(nowPlaying)
                                     Spacer()
-                                    Divider().frame(height: 36)
+                                    dashboardMiniProgress(compact: false)
                                 }
-                                .padding(.horizontal, 12)
-                                .opacity(0.35)
                             }
 
-                            if let tags = scrobbleService.currentArtistDetails?.tags, !tags.isEmpty {
-                                tagLinks(title: "Popular tags", tags: Array(tags.prefix(6)))
-                            }
+                            Divider().overlay(sectionDividerColor)
 
-                            if let similar = scrobbleService.currentArtistDetails?.similarArtists, !similar.isEmpty {
-                                VStack(alignment: .leading, spacing: 8) {
-                                    Text("Similar Artists")
-                                        .font(.custom("Avenir Next Demi Bold", size: 18))
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 18) {
-                                            ForEach(similar.prefix(6), id: \.name) { item in
-                                                similarArtistLink(item)
-                                            }
+                            if metrics.isCompact {
+                                VStack(alignment: .leading, spacing: metrics.cardSpacing) {
+                                    dashboardArt(dashboardTrackImageURL, size: metrics.trackArtSize)
+                                        .onTapGesture {
+                                            openDetailForCurrentTrack(nowPlaying)
                                         }
+                                    trackSummary(nowPlaying, metrics: metrics)
+                                }
+                            } else {
+                                HStack(alignment: .top, spacing: metrics.cardSpacing) {
+                                    dashboardArt(dashboardTrackImageURL, size: metrics.trackArtSize)
+                                        .onTapGesture {
+                                            openDetailForCurrentTrack(nowPlaying)
+                                        }
+                                    trackSummary(nowPlaying, metrics: metrics)
+                                        .frame(maxWidth: .infinity, alignment: .leading)
+                                }
+                            }
+
+                            trackInsightsCard(fontSize: metrics.bodyFont)
+
+                            Divider().overlay(sectionDividerColor)
+
+                            VStack(alignment: .leading, spacing: metrics.cardSpacing) {
+                                Text(scrobbleService.currentArtistDetails?.name ?? nowPlaying.artist)
+                                    .font(.custom("Avenir Next Demi Bold", size: metrics.artistTitleFont))
+
+                                if metrics.isCompact {
+                                    VStack(alignment: .leading, spacing: metrics.cardSpacing) {
+                                        dashboardArt(scrobbleService.currentArtistDetails?.imageURL ?? dashboardTrackImageURL, size: metrics.artistArtSize)
+                                        HTMLSummaryText(rawHTML: artistSummaryText, fontSize: metrics.bodyFont, lineLimit: metrics.summaryLineLimit)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                } else {
+                                    HStack(alignment: .top, spacing: metrics.cardSpacing) {
+                                        dashboardArt(scrobbleService.currentArtistDetails?.imageURL ?? dashboardTrackImageURL, size: metrics.artistArtSize)
+                                        HTMLSummaryText(rawHTML: artistSummaryText, fontSize: metrics.bodyFont, lineLimit: metrics.summaryLineLimit)
+                                            .frame(maxWidth: .infinity, alignment: .leading)
+                                    }
+                                }
+
+                                statGrid(metrics: metrics)
+
+                                if let tags = scrobbleService.currentArtistDetails?.tags, !tags.isEmpty {
+                                    tagLinks(title: "Popular tags", tags: Array(tags.prefix(metrics.maxTagCount)))
+                                }
+
+                                if let similar = scrobbleService.currentArtistDetails?.similarArtists, !similar.isEmpty {
+                                    VStack(alignment: .leading, spacing: 8) {
+                                        Text("Similar Artists")
+                                            .font(.custom("Avenir Next Demi Bold", size: metrics.sectionTitleFont))
+                                        similarArtistsGrid(Array(similar.prefix(metrics.maxSimilarArtists)), metrics: metrics)
                                     }
                                 }
                             }
                         }
+                        .frame(maxWidth: metrics.contentMaxWidth, alignment: .leading)
+                        .padding(metrics.cardPadding)
+                        .background {
+                            dashboardBackgroundArt(dashboardHeroImageURL)
+                        }
+                        .background(dashboardCardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16, style: .continuous)
+                                .strokeBorder(cardBorderColor, lineWidth: 1)
+                        )
+                        .animation(.easeInOut(duration: 0.45), value: moodPalette)
+                    } else {
+                        Text("No track detected.")
+                            .font(.custom("Avenir Next Medium", size: 14))
+                            .foregroundStyle(.secondary)
+                            .padding(20)
+                            .appPanelStyle()
                     }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(22)
-                    .background {
-                        dashboardBackgroundArt(dashboardHeroImageURL)
-                    }
-                    .background(dashboardCardBackground, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16, style: .continuous)
-                            .strokeBorder(cardBorderColor, lineWidth: 1)
-                    )
-                    .animation(.easeInOut(duration: 0.45), value: moodPalette)
-                } else {
-                    Text("No track detected.")
-                        .font(.custom("Avenir Next Medium", size: 14))
-                        .foregroundStyle(.secondary)
-                        .padding(20)
-                        .appPanelStyle()
                 }
+                .frame(maxWidth: metrics.contentMaxWidth, alignment: .leading)
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(24)
         }
         .task(id: dashboardMoodKey) {
             let palette = await MoodPaletteEngine.resolvePalette(
@@ -643,6 +665,106 @@ private struct DashboardView: View {
             RoundedRectangle(cornerRadius: 8, style: .continuous)
                 .fill(placeholderFill)
                 .frame(width: size, height: size)
+        }
+    }
+
+    // The dashboard follows the same responsive rule used in the inspector:
+    // reflow before shrink. Modern desktop UI tends to preserve readable type
+    // and information hierarchy by changing composition first (stacking,
+    // adaptive grids, capped content widths) and only then reducing font size.
+    // References:
+    // Apple. (n.d.). Human Interface Guidelines. https://developer.apple.com/design/human-interface-guidelines/
+    // Apple. (n.d.). ViewThatFits. https://developer.apple.com/documentation/swiftui/viewthatfits
+    private struct DashboardMetrics {
+        let width: CGFloat
+
+        var isCompact: Bool { width < 960 }
+        var isNarrow: Bool { width < 760 }
+        var contentMaxWidth: CGFloat { isCompact ? .infinity : 1180 }
+        var screenTitleFont: CGFloat { isNarrow ? 20 : 24 }
+        var cardPadding: CGFloat { isNarrow ? 18 : 22 }
+        var cardSpacing: CGFloat { isNarrow ? 10 : 14 }
+        var sectionSpacing: CGFloat { isNarrow ? 16 : 18 }
+        var trackArtSize: CGFloat { isNarrow ? 112 : 132 }
+        var artistArtSize: CGFloat { isNarrow ? 112 : 126 }
+        var titleFont: CGFloat { isNarrow ? 22 : 28 }
+        var subtitleFont: CGFloat { isNarrow ? 16 : 18 }
+        var bodyFont: CGFloat { isNarrow ? 14 : 15 }
+        var artistTitleFont: CGFloat { isNarrow ? 20 : 22 }
+        var sectionTitleFont: CGFloat { isNarrow ? 16 : 18 }
+        var summaryLineLimit: Int { isNarrow ? 5 : 6 }
+        var maxTagCount: Int { isNarrow ? 5 : 6 }
+        var maxSimilarArtists: Int { isCompact ? 6 : 8 }
+        var statColumns: [GridItem] {
+            isCompact
+                ? [GridItem(.adaptive(minimum: isNarrow ? 140 : 160), alignment: .leading)]
+                : [GridItem(.flexible()), GridItem(.flexible()), GridItem(.flexible())]
+        }
+        var similarArtistColumns: [GridItem] {
+            [GridItem(.adaptive(minimum: isNarrow ? 84 : 92), spacing: 18, alignment: .topLeading)]
+        }
+    }
+
+    private func sourceLabel(_ nowPlaying: Track) -> some View {
+        Label {
+            Text("Scrobbling from \(nowPlaying.sourceApp ?? "Music")")
+                .font(.custom("Avenir Next Medium", size: 15))
+        } icon: {
+            Image(systemName: "music.note")
+                .font(.system(size: 15, weight: .semibold))
+        }
+    }
+
+    private func trackSummary(_ nowPlaying: Track, metrics: DashboardMetrics) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(scrobbleService.currentTrackDetails?.name ?? nowPlaying.title)
+                .font(.custom("Avenir Next Demi Bold", size: metrics.titleFont))
+                .lineLimit(metrics.isNarrow ? 4 : 3)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    openDetailForCurrentTrack(nowPlaying)
+                }
+                .simultaneousGesture(
+                    MagnificationGesture()
+                        .onEnded { value in
+                            guard value > 1.05 else { return }
+                            openDetailForCurrentTrack(nowPlaying)
+                        }
+                )
+            Text("by \(scrobbleService.currentTrackDetails?.artist ?? nowPlaying.artist)")
+                .font(.custom("Avenir Next Demi Bold", size: metrics.subtitleFont))
+                .foregroundStyle(.secondary)
+                .lineLimit(metrics.isNarrow ? 3 : 2)
+            if let album = scrobbleService.currentTrackDetails?.album ?? nowPlaying.album {
+                Text("from \(album)")
+                    .font(.custom("Avenir Next Medium", size: metrics.bodyFont))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(metrics.isNarrow ? 3 : 2)
+            }
+            HStack(spacing: 14) {
+                Image(systemName: "heart")
+                Image(systemName: "tag")
+                Image(systemName: "square.and.arrow.up")
+            }
+            .font(.system(size: 18, weight: .medium))
+            .foregroundStyle(.secondary)
+            .padding(.top, 2)
+        }
+    }
+
+    private func statGrid(metrics: DashboardMetrics) -> some View {
+        LazyVGrid(columns: metrics.statColumns, alignment: .leading, spacing: 12) {
+            statColumn("Listeners", scrobbleService.currentArtistDetails?.listeners)
+            statColumn("Plays", scrobbleService.currentArtistDetails?.playcount)
+            statColumn("Plays in your library", scrobbleService.currentTrackDetails?.userPlaycount)
+        }
+    }
+
+    private func similarArtistsGrid(_ artists: [LastfmSimilarArtist], metrics: DashboardMetrics) -> some View {
+        LazyVGrid(columns: metrics.similarArtistColumns, alignment: .leading, spacing: 14) {
+            ForEach(artists, id: \.name) { item in
+                similarArtistLink(item, compact: metrics.isNarrow)
+            }
         }
     }
 
@@ -720,11 +842,11 @@ private struct DashboardView: View {
             )
     }
 
-    private var dashboardMiniProgress: some View {
-        VStack(alignment: .trailing, spacing: 4) {
+    private func dashboardMiniProgress(compact: Bool) -> some View {
+        VStack(alignment: compact ? .leading : .trailing, spacing: 4) {
             playbackChip
             ProgressView(value: scrobbleService.scrobbleProgress, total: 1)
-                .frame(width: 90)
+                .frame(width: compact ? 132 : 90)
                 .progressViewStyle(.linear)
             Text("\(Int(scrobbleService.elapsedForCurrentTrack))s / \(Int(scrobbleService.scrobbleThreshold))s")
                 .font(.custom("Avenir Next Medium", size: 11))
@@ -732,11 +854,11 @@ private struct DashboardView: View {
         }
     }
 
-    private var trackInsightsCard: some View {
+    private func trackInsightsCard(fontSize: CGFloat) -> some View {
         // Mirrors the legacy client "you listened X times" callout while gracefully
         // degrading when Last.fm omits user-specific counters.
         Text("You've listened to \(scrobbleService.currentTrackDetails?.artist ?? scrobbleService.currentTrack?.artist ?? "this artist") \(count(scrobbleService.currentArtistDetails?.userPlaycount)) times and \(scrobbleService.currentTrackDetails?.name ?? scrobbleService.currentTrack?.title ?? "this track") \(count(scrobbleService.currentTrackDetails?.userPlaycount)) time(s).")
-            .font(.custom("Avenir Next Medium", size: 14))
+            .font(.custom("Avenir Next Medium", size: fontSize))
             .padding(12)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(calloutBackground, in: RoundedRectangle(cornerRadius: 9, style: .continuous))
@@ -824,16 +946,17 @@ private struct DashboardView: View {
         }
     }
 
-    private func similarArtistLink(_ similar: LastfmSimilarArtist) -> some View {
+    private func similarArtistLink(_ similar: LastfmSimilarArtist, compact: Bool) -> some View {
         Button {
             openURL(lastfmArtistURL(name: similar.name, fallback: similar.url))
         } label: {
             VStack(alignment: .leading, spacing: 4) {
-                dashboardArt(similar.imageURL, size: 72)
+                dashboardArt(similar.imageURL, size: compact ? 64 : 72)
                 Text(similar.name)
-                    .font(.custom("Avenir Next Medium", size: 14))
-                    .lineLimit(1)
-                    .frame(width: 90, alignment: .leading)
+                    .font(.custom("Avenir Next Medium", size: compact ? 13 : 14))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: compact ? 84 : 90, alignment: .leading)
             }
         }
         .buttonStyle(.plain)
@@ -1555,63 +1678,95 @@ private struct ScrobbleDetailPanel: View {
     @EnvironmentObject private var scrobbleService: ScrobbleService
     @Environment(\.openURL) private var openURL
     let item: LastfmRecentScrobble
+    let kind: DeepLinkTarget.Kind
+    let availableWidth: CGFloat
 
     var body: some View {
-        GeometryReader { geo in
-            let metrics = DetailPanelMetrics(width: geo.size.width)
+        let metrics = DetailPanelMetrics(width: availableWidth)
 
-            ScrollView {
-                VStack(alignment: .leading, spacing: metrics.sectionSpacing) {
-                    HStack {
-                        Text("Track Detail")
-                            .font(.custom("Avenir Next Demi Bold", size: metrics.headerFont))
-                        Spacer()
-                        Text(scrobbleService.inspectStatus)
-                            .font(.custom("Avenir Next Medium", size: 12))
-                            .foregroundStyle(.secondary)
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: metrics.sectionSpacing) {
+                HStack {
+                    Text(panelTitle)
+                        .font(.custom("Avenir Next Demi Bold", size: metrics.headerFont))
+                    Spacer()
+                    Text(scrobbleService.inspectStatus)
+                        .font(.custom("Avenir Next Medium", size: 12))
+                        .foregroundStyle(.secondary)
+                }
 
+                if kind == .track || kind == .album {
                     trackHeader(metrics: metrics)
+                }
 
-                    if let track = scrobbleService.inspectedTrackDetails {
-                        statGrid(
-                            listeners: track.listeners,
-                            plays: track.playcount,
-                            library: track.userPlaycount,
-                            compact: metrics.isCompact
-                        )
-                        if !track.tags.isEmpty {
-                            tagLinks(title: "Popular tags", tags: Array(track.tags.prefix(7)))
-                        }
+                // Mirror the legacy iOS navigation model here: related content must follow the
+                // entity the user opened, not the artist context we happen to have loaded.
+                if kind == .track, let track = scrobbleService.inspectedTrackDetails {
+                    statGrid(
+                        listeners: track.listeners,
+                        plays: track.playcount,
+                        library: track.userPlaycount,
+                        compact: metrics.isCompact
+                    )
+                    if !track.tags.isEmpty {
+                        tagLinks(title: "Popular tags", tags: Array(track.tags.prefix(7)))
                     }
-
-                    if let artist = scrobbleService.inspectedArtistDetails {
-                        Divider()
-                        Text(artist.name)
-                            .font(.custom("Avenir Next Demi Bold", size: metrics.artistTitleFont))
-                            .fixedSize(horizontal: false, vertical: true)
-
-                        artistSection(artist, metrics: metrics)
-
-                        statGrid(
-                            listeners: artist.listeners,
-                            plays: artist.playcount,
-                            library: artist.userPlaycount,
-                            compact: metrics.isCompact
-                        )
-                        if !artist.tags.isEmpty {
-                            tagLinks(title: "Tags", tags: Array(artist.tags.prefix(10)))
-                        }
-                        if !artist.similarArtists.isEmpty {
-                            Text("Similar Artists")
-                                .font(.custom("Avenir Next Medium", size: 17))
-                            similarArtistsGrid(artist.similarArtists, compact: metrics.isCompact)
-                        }
+                    if !scrobbleService.inspectedSimilarTracks.isEmpty {
+                        Text("Similar Tracks")
+                            .font(.custom("Avenir Next Medium", size: 17))
+                        similarTracksGrid(scrobbleService.inspectedSimilarTracks, compact: metrics.isCompact)
                     }
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.trailing, 4)
+
+                if kind == .album, !scrobbleService.inspectedSimilarAlbums.isEmpty {
+                    Text("Similar Albums")
+                        .font(.custom("Avenir Next Medium", size: 17))
+                    similarAlbumsGrid(scrobbleService.inspectedSimilarAlbums, compact: metrics.isCompact)
+                }
+
+                if let artist = scrobbleService.inspectedArtistDetails {
+                    if kind == .track || kind == .album {
+                        Divider()
+                    }
+                    Text(artist.name)
+                        .font(.custom("Avenir Next Demi Bold", size: metrics.artistTitleFont))
+                        .lineLimit(metrics.isCompact ? 3 : 2)
+                        .fixedSize(horizontal: false, vertical: true)
+
+                    artistSection(artist, metrics: metrics)
+
+                    statGrid(
+                        listeners: artist.listeners,
+                        plays: artist.playcount,
+                        library: artist.userPlaycount,
+                        compact: metrics.isCompact
+                    )
+                    if !artist.tags.isEmpty {
+                        tagLinks(title: "Tags", tags: Array(artist.tags.prefix(10)))
+                    }
+                    // Match the classic iOS app's semantics: only artist detail
+                    // renders similar artists. Track/album detail get their own
+                    // "similar" blocks instead of inheriting artist similarity.
+                    if kind == .artist, !artist.similarArtists.isEmpty {
+                        Text("Similar Artists")
+                            .font(.custom("Avenir Next Medium", size: 17))
+                        similarArtistsGrid(artist.similarArtists, compact: metrics.isCompact)
+                    }
+                }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.trailing, 4)
+        }
+    }
+
+    private var panelTitle: String {
+        switch kind {
+        case .track:
+            return "Track Detail"
+        case .artist:
+            return "Artist Detail"
+        case .album:
+            return "Album Detail"
         }
     }
 
@@ -1626,15 +1781,20 @@ private struct ScrobbleDetailPanel: View {
     private struct DetailPanelMetrics {
         let width: CGFloat
 
-        var isCompact: Bool { width < 660 }
-        var artworkSize: CGFloat { isCompact ? min(220, max(150, width - 48)) : 180 }
-        var headerFont: CGFloat { isCompact ? 20 : 24 }
-        var titleFont: CGFloat { isCompact ? 22 : 26 }
-        var subtitleFont: CGFloat { isCompact ? 16 : 20 }
-        var albumFont: CGFloat { isCompact ? 14 : 16 }
-        var artistTitleFont: CGFloat { isCompact ? 26 : 32 }
-        var sectionSpacing: CGFloat { isCompact ? 10 : 12 }
-        var stackSpacing: CGFloat { isCompact ? 10 : 12 }
+        var isCompact: Bool { width < 620 }
+        var isNarrowCompact: Bool { width < 500 }
+        var artworkSize: CGFloat {
+            if isNarrowCompact { return min(180, max(128, width - 56)) }
+            if isCompact { return min(220, max(150, width - 48)) }
+            return 180
+        }
+        var headerFont: CGFloat { isNarrowCompact ? 18 : (isCompact ? 20 : 24) }
+        var titleFont: CGFloat { isNarrowCompact ? 18 : (isCompact ? 22 : 26) }
+        var subtitleFont: CGFloat { isNarrowCompact ? 14 : (isCompact ? 16 : 20) }
+        var albumFont: CGFloat { isNarrowCompact ? 13 : (isCompact ? 14 : 16) }
+        var artistTitleFont: CGFloat { isNarrowCompact ? 22 : (isCompact ? 26 : 32) }
+        var sectionSpacing: CGFloat { isNarrowCompact ? 8 : (isCompact ? 10 : 12) }
+        var stackSpacing: CGFloat { isNarrowCompact ? 8 : (isCompact ? 10 : 12) }
     }
 
     @ViewBuilder
@@ -1648,6 +1808,7 @@ private struct ScrobbleDetailPanel: View {
             HStack(alignment: .top, spacing: metrics.stackSpacing) {
                 artwork(size: metrics.artworkSize)
                 trackTextBlock(metrics: metrics)
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 0)
             }
         }
@@ -1655,19 +1816,58 @@ private struct ScrobbleDetailPanel: View {
 
     private func trackTextBlock(metrics: DetailPanelMetrics) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text(item.track)
+            Text(headerPrimaryText)
                 .font(.custom("Avenir Next Demi Bold", size: metrics.titleFont))
+                .lineLimit(metrics.isNarrowCompact ? 5 : 4)
                 .fixedSize(horizontal: false, vertical: true)
                 .layoutPriority(1)
-            Text("by \(item.artist)")
+            Text(headerSecondaryText)
                 .font(.custom("Avenir Next Medium", size: metrics.subtitleFont))
+                .lineLimit(metrics.isNarrowCompact ? 4 : 3)
                 .fixedSize(horizontal: false, vertical: true)
-            if let album = scrobbleService.inspectedTrackDetails?.album {
-                Text("from \(album)")
+            if let tertiary = headerTertiaryText {
+                Text(tertiary)
                     .font(.custom("Avenir Next Medium", size: metrics.albumFont))
                     .foregroundStyle(.secondary)
+                    .lineLimit(metrics.isNarrowCompact ? 4 : 3)
                     .fixedSize(horizontal: false, vertical: true)
             }
+        }
+    }
+
+    private var headerPrimaryText: String {
+        switch kind {
+        case .track:
+            return item.track
+        case .artist:
+            return item.artist
+        case .album:
+            return item.album ?? item.track
+        }
+    }
+
+    private var headerSecondaryText: String {
+        switch kind {
+        case .track:
+            return "by \(item.artist)"
+        case .artist:
+            return "Artist overview"
+        case .album:
+            return "by \(item.artist)"
+        }
+    }
+
+    private var headerTertiaryText: String? {
+        switch kind {
+        case .track:
+            if let album = scrobbleService.inspectedTrackDetails?.album {
+                return "from \(album)"
+            }
+            return nil
+        case .artist:
+            return nil
+        case .album:
+            return nil
         }
     }
 
@@ -1708,6 +1908,30 @@ private struct ScrobbleDetailPanel: View {
         return LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
             ForEach(artists.prefix(compact ? 6 : 8)) { similar in
                 similarArtistLink(similar)
+            }
+        }
+    }
+
+    private func similarTracksGrid(_ tracks: [LastfmSimilarTrack], compact: Bool) -> some View {
+        let columns = compact
+            ? [GridItem(.adaptive(minimum: 118), spacing: 14, alignment: .topLeading)]
+            : [GridItem(.adaptive(minimum: 124), spacing: 16, alignment: .topLeading)]
+
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+            ForEach(tracks.prefix(compact ? 6 : 8)) { track in
+                similarTrackLink(track)
+            }
+        }
+    }
+
+    private func similarAlbumsGrid(_ albums: [LastfmSimilarAlbum], compact: Bool) -> some View {
+        let columns = compact
+            ? [GridItem(.adaptive(minimum: 118), spacing: 14, alignment: .topLeading)]
+            : [GridItem(.adaptive(minimum: 124), spacing: 16, alignment: .topLeading)]
+
+        return LazyVGrid(columns: columns, alignment: .leading, spacing: 14) {
+            ForEach(albums.prefix(compact ? 6 : 8)) { album in
+                similarAlbumLink(album)
             }
         }
     }
@@ -1785,11 +2009,74 @@ private struct ScrobbleDetailPanel: View {
                 artistArt(similar.imageURL, size: 74)
                 Text(similar.name)
                     .font(.custom("Avenir Next Regular", size: 12))
-                    .lineLimit(1)
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
                     .frame(width: 74, alignment: .leading)
             }
         }
         .buttonStyle(.plain)
+    }
+
+    private func similarTrackLink(_ similar: LastfmSimilarTrack) -> some View {
+        Button {
+            openURL(lastfmTrackURL(name: similar.name, artist: similar.artist, fallback: similar.url))
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                artworkThumbnail(similar.imageURL, size: 74)
+                Text(similar.name)
+                    .font(.custom("Avenir Next Regular", size: 12))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 92, alignment: .leading)
+                Text(similar.artist)
+                    .font(.custom("Avenir Next Medium", size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .frame(width: 92, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func similarAlbumLink(_ similar: LastfmSimilarAlbum) -> some View {
+        Button {
+            openURL(lastfmAlbumURL(name: similar.name, artist: similar.artist, fallback: similar.url))
+        } label: {
+            VStack(alignment: .leading, spacing: 4) {
+                artworkThumbnail(similar.imageURL, size: 74)
+                Text(similar.name)
+                    .font(.custom("Avenir Next Regular", size: 12))
+                    .lineLimit(2)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(width: 92, alignment: .leading)
+                Text(similar.artist)
+                    .font(.custom("Avenir Next Medium", size: 11))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(2)
+                    .frame(width: 92, alignment: .leading)
+            }
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func artworkThumbnail(_ urlString: String?, size: CGFloat) -> some View {
+        if let urlString, let url = URL(string: urlString) {
+            AsyncImage(url: url) { phase in
+                switch phase {
+                case let .success(image):
+                    image.resizable().scaledToFill()
+                default:
+                    Color.white.opacity(0.06)
+                }
+            }
+            .frame(width: size, height: size)
+            .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+        } else {
+            RoundedRectangle(cornerRadius: 8, style: .continuous)
+                .fill(Color.white.opacity(0.06))
+                .frame(width: size, height: size)
+        }
     }
 
     private func lastfmTagURL(_ tag: String) -> URL {
@@ -1807,6 +2094,28 @@ private struct ScrobbleDetailPanel: View {
         allowed.remove(charactersIn: "/")
         let encoded = name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name
         return URL(string: "https://www.last.fm/music/\(encoded)")!
+    }
+
+    private func lastfmTrackURL(name: String, artist: String, fallback: String?) -> URL {
+        if let fallback, let url = URL(string: fallback) {
+            return url
+        }
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encodedArtist = artist.addingPercentEncoding(withAllowedCharacters: allowed) ?? artist
+        let encodedTrack = name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name
+        return URL(string: "https://www.last.fm/music/\(encodedArtist)/_/\(encodedTrack)")!
+    }
+
+    private func lastfmAlbumURL(name: String, artist: String, fallback: String?) -> URL {
+        if let fallback, let url = URL(string: fallback) {
+            return url
+        }
+        var allowed = CharacterSet.urlPathAllowed
+        allowed.remove(charactersIn: "/")
+        let encodedArtist = artist.addingPercentEncoding(withAllowedCharacters: allowed) ?? artist
+        let encodedAlbum = name.addingPercentEncoding(withAllowedCharacters: allowed) ?? name
+        return URL(string: "https://www.last.fm/music/\(encodedArtist)/\(encodedAlbum)")!
     }
 }
 
@@ -1856,23 +2165,27 @@ private struct FlowLayout: Layout {
 }
 
 private struct InspectorResizeHandle: View {
+    @Environment(\.colorScheme) private var colorScheme
     @Binding var width: Double
     let minimum: CGFloat
     let maximum: CGFloat
     @State private var dragBaseWidth: Double?
+    @State private var isHovering = false
 
     var body: some View {
         ZStack {
             Rectangle()
                 .fill(.clear)
-                .frame(width: 14)
+                .frame(width: 18)
                 .contentShape(Rectangle())
 
             Capsule(style: .continuous)
-                .fill(Color.secondary.opacity(0.25))
-                .frame(width: 4, height: 54)
+                .fill(handleColor)
+                .frame(width: isHovering ? 6 : 4, height: 72)
+                .shadow(color: Color.black.opacity(colorScheme == .dark ? 0.18 : 0.08), radius: 8, y: 0)
         }
         .onHover { hovering in
+            isHovering = hovering
             if hovering {
                 NSCursor.resizeLeftRight.push()
             } else {
@@ -1893,6 +2206,13 @@ private struct InspectorResizeHandle: View {
                 }
         )
         .accessibilityLabel("Resize inspector")
+    }
+
+    private var handleColor: Color {
+        if isHovering {
+            return Color(red: 1.0, green: 0.33, blue: 0.36).opacity(0.92)
+        }
+        return colorScheme == .dark ? Color.white.opacity(0.22) : Color.black.opacity(0.16)
     }
 }
 
@@ -2468,101 +2788,129 @@ private struct ChartsView: View {
     @EnvironmentObject private var scrobbleService: ScrobbleService
     let onOpenTrack: (_ track: String, _ artist: String) -> Void
     let onOpenArtist: (_ artist: String) -> Void
+    let onOpenAlbum: (_ album: String, _ artist: String, _ imageURL: String?) -> Void
 
     var body: some View {
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Charts")
-                    .font(.custom("Avenir Next Demi Bold", size: 24))
+        GeometryReader { proxy in
+            let metrics = ChartsMetrics(width: proxy.size.width - 48)
 
-                if !scrobbleService.weeklyTopArtists.isEmpty {
-                    Text("\(scrobbleService.weeklyTopArtists.count) Artists")
-                        .font(.custom("Avenir Next Demi Bold", size: 30))
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Charts")
+                        .font(.custom("Avenir Next Demi Bold", size: metrics.screenTitleFont))
 
-                    ScrollView(.horizontal, showsIndicators: false) {
-                        HStack(spacing: 16) {
+                    if !scrobbleService.weeklyTopArtists.isEmpty {
+                        Text("\(scrobbleService.weeklyTopArtists.count) Artists")
+                            .font(.custom("Avenir Next Demi Bold", size: metrics.sectionCountFont))
+
+                        LazyVGrid(columns: metrics.cardColumns, alignment: .leading, spacing: 16) {
                             ForEach(scrobbleService.weeklyTopArtists.prefix(8)) { artist in
                                 VStack(alignment: .leading, spacing: 6) {
                                     cover(
                                         artist.imageURL,
-                                        size: 156,
+                                        size: metrics.coverSize,
                                         placeholder: artist.name
                                     )
                                     Text(artist.name)
-                                        .font(.custom("Avenir Next Medium", size: 16))
-                                        .lineLimit(1)
+                                        .font(.custom("Avenir Next Medium", size: metrics.cardTitleFont))
+                                        .lineLimit(2)
+                                        .fixedSize(horizontal: false, vertical: true)
                                     Text("\((artist.playcount ?? 0).formatted()) scrobbles")
-                                        .font(.custom("Avenir Next Regular", size: 14))
+                                        .font(.custom("Avenir Next Regular", size: metrics.cardMetaFont))
                                         .foregroundStyle(.secondary)
                                 }
-                                .frame(width: 160)
                                 .contentShape(Rectangle())
                                 .onTapGesture {
                                     onOpenArtist(artist.name)
                                 }
                             }
                         }
+                        .appPanelStyle()
+                    }
+
+                    Text("\(topAlbums.count) Albums")
+                        .font(.custom("Avenir Next Demi Bold", size: metrics.sectionCountFont))
+                    LazyVGrid(columns: metrics.cardColumns, alignment: .leading, spacing: 16) {
+                        ForEach(topAlbums.prefix(8), id: \.id) { album in
+                            VStack(alignment: .leading, spacing: 6) {
+                                cover(album.imageURL, size: metrics.coverSize)
+                                Text(album.title)
+                                    .font(.custom("Avenir Next Medium", size: metrics.cardTitleFont))
+                                    .lineLimit(2)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                Text(album.artist)
+                                    .font(.custom("Avenir Next Regular", size: metrics.cardMetaFont))
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                                Text("\(album.count.formatted()) scrobbles")
+                                    .font(.custom("Avenir Next Regular", size: metrics.cardMetaFont - 1))
+                                    .foregroundStyle(.secondary)
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                onOpenAlbum(album.title, album.artist, album.imageURL)
+                            }
+                        }
+                    }
+                    .appPanelStyle()
+
+                    Text("\(topTracks.count) Tracks")
+                        .font(.custom("Avenir Next Demi Bold", size: metrics.sectionCountFont))
+                    VStack(spacing: 10) {
+                        ForEach(topTracks.prefix(10), id: \.id) { track in
+                            HStack(alignment: .top, spacing: 10) {
+                                cover(track.imageURL, size: metrics.trackCoverSize)
+                                VStack(alignment: .leading, spacing: 2) {
+                                    Text(track.title)
+                                        .font(.custom("Avenir Next Medium", size: metrics.trackTitleFont))
+                                        .lineLimit(metrics.isCompact ? 2 : 1)
+                                    Text(track.artist)
+                                        .font(.custom("Avenir Next Regular", size: metrics.trackMetaFont))
+                                        .foregroundStyle(.secondary)
+                                        .lineLimit(metrics.isCompact ? 2 : 1)
+                                }
+                                Spacer(minLength: 8)
+                                Text("\(track.count.formatted())")
+                                    .font(.custom("Avenir Next Medium", size: metrics.trackCountFont))
+                                    .foregroundStyle(.secondary)
+                                    .fixedSize()
+                            }
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                onOpenTrack(track.title, track.artist)
+                            }
+                        }
                     }
                     .appPanelStyle()
                 }
-
-                Text("\(topAlbums.count) Albums")
-                    .font(.custom("Avenir Next Demi Bold", size: 30))
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 16) {
-                        ForEach(topAlbums.prefix(8), id: \.id) { album in
-                            VStack(alignment: .leading, spacing: 6) {
-                                cover(album.imageURL, size: 156)
-                                Text(album.title)
-                                    .font(.custom("Avenir Next Medium", size: 16))
-                                    .lineLimit(1)
-                                Text(album.artist)
-                                    .font(.custom("Avenir Next Regular", size: 14))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                                Text("\(album.count.formatted()) scrobbles")
-                                    .font(.custom("Avenir Next Regular", size: 13))
-                                    .foregroundStyle(.secondary)
-                            }
-                            .frame(width: 160)
-                            .contentShape(Rectangle())
-                            .onTapGesture {
-                                onOpenArtist(album.artist)
-                            }
-                        }
-                    }
-                }
-                .appPanelStyle()
-
-                Text("\(topTracks.count) Tracks")
-                    .font(.custom("Avenir Next Demi Bold", size: 30))
-                VStack(spacing: 10) {
-                    ForEach(topTracks.prefix(10), id: \.id) { track in
-                        HStack(spacing: 10) {
-                            cover(track.imageURL, size: 54)
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(track.title)
-                                    .font(.custom("Avenir Next Medium", size: 18))
-                                    .lineLimit(1)
-                                Text(track.artist)
-                                    .font(.custom("Avenir Next Regular", size: 16))
-                                    .foregroundStyle(.secondary)
-                                    .lineLimit(1)
-                            }
-                            Spacer()
-                            Text("\(track.count.formatted())")
-                                .font(.custom("Avenir Next Medium", size: 16))
-                                .foregroundStyle(.secondary)
-                        }
-                        .contentShape(Rectangle())
-                        .onTapGesture {
-                            onOpenTrack(track.title, track.artist)
-                        }
-                    }
-                }
-                .appPanelStyle()
+                .frame(maxWidth: metrics.contentMaxWidth, alignment: .leading)
+                .padding(24)
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .padding(24)
+        }
+    }
+
+    // Charts use adaptive card columns instead of hard-coded horizontal strips.
+    // The current desktop pattern is to let cards wrap as width changes and keep
+    // content readable, rather than preserving a fixed card width that forces
+    // clipping or excessive horizontal scrolling.
+    private struct ChartsMetrics {
+        let width: CGFloat
+
+        var isCompact: Bool { width < 980 }
+        var isNarrow: Bool { width < 760 }
+        var contentMaxWidth: CGFloat { isCompact ? .infinity : 1240 }
+        var screenTitleFont: CGFloat { isNarrow ? 22 : 24 }
+        var sectionCountFont: CGFloat { isNarrow ? 24 : 30 }
+        var coverSize: CGFloat { isNarrow ? 136 : 156 }
+        var trackCoverSize: CGFloat { isNarrow ? 46 : 54 }
+        var cardTitleFont: CGFloat { isNarrow ? 15 : 16 }
+        var cardMetaFont: CGFloat { isNarrow ? 13 : 14 }
+        var trackTitleFont: CGFloat { isNarrow ? 16 : 18 }
+        var trackMetaFont: CGFloat { isNarrow ? 14 : 16 }
+        var trackCountFont: CGFloat { isNarrow ? 14 : 16 }
+        var cardColumns: [GridItem] {
+            [GridItem(.adaptive(minimum: isNarrow ? 144 : 160), spacing: 16, alignment: .topLeading)]
         }
     }
 

@@ -55,6 +55,8 @@ final class ScrobbleService: ObservableObject {
     @Published private(set) var currentArtistDetails: LastfmArtistDetails?
     @Published private(set) var inspectedTrackDetails: LastfmTrackDetails?
     @Published private(set) var inspectedArtistDetails: LastfmArtistDetails?
+    @Published private(set) var inspectedSimilarTracks: [LastfmSimilarTrack] = []
+    @Published private(set) var inspectedSimilarAlbums: [LastfmSimilarAlbum] = []
     @Published private(set) var inspectStatus = "Select a scrobble to inspect"
     @Published private(set) var profile: LastfmUserProfile?
     @Published private(set) var latestScrobbles: [LastfmRecentScrobble] = []
@@ -445,15 +447,15 @@ final class ScrobbleService: ObservableObject {
         lastRecoveryHint = nil
         inspectedTrackDetails = nil
         inspectedArtistDetails = nil
+        inspectedSimilarTracks = []
+        inspectedSimilarAlbums = []
 
         var loadedAnything = false
         var degraded = false
-        let isArtistOnlyInspection =
-            scrobble.id.hasPrefix("deep-") &&
-            scrobble.track.trimmingCharacters(in: .whitespacesAndNewlines)
-                .caseInsensitiveCompare(scrobble.artist.trimmingCharacters(in: .whitespacesAndNewlines)) == .orderedSame
+        let isArtistOnlyInspection = scrobble.id.hasPrefix("deep-artist-")
+        let isAlbumInspection = scrobble.id.hasPrefix("deep-album-")
 
-        if !isArtistOnlyInspection {
+        if !isArtistOnlyInspection && !isAlbumInspection {
             do {
                 inspectedTrackDetails = try await fetchWithRetry {
                     try await self.api.fetchTrackDetails(artist: scrobble.artist, track: scrobble.track)
@@ -475,6 +477,38 @@ final class ScrobbleService: ObservableObject {
                     tags: []
                 )
                 loadedAnything = true
+                degraded = true
+                handle(error: error)
+            }
+
+            do {
+                inspectedSimilarTracks = try await fetchWithRetry {
+                    try await self.api.fetchSimilarTracks(artist: scrobble.artist, track: scrobble.track, limit: 8)
+                }
+                loadedAnything = true
+            } catch is CancellationError {
+                return
+            } catch {
+                inspectedSimilarTracks = []
+                degraded = true
+                handle(error: error)
+            }
+        }
+
+        if isAlbumInspection {
+            do {
+                inspectedSimilarAlbums = try await fetchWithRetry {
+                    try await self.api.fetchSimilarAlbums(
+                        artist: scrobble.artist,
+                        album: scrobble.album ?? scrobble.track,
+                        limit: 8
+                    )
+                }
+                loadedAnything = true
+            } catch is CancellationError {
+                return
+            } catch {
+                inspectedSimilarAlbums = []
                 degraded = true
                 handle(error: error)
             }
