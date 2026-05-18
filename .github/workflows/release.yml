@@ -1,0 +1,76 @@
+name: Publish LastfmModern Release
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and upload assets for
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    name: Build and upload macOS app
+    runs-on: macos-latest
+
+    env:
+      DERIVED_DATA_PATH: ${{ runner.temp }}/LastfmModernDerivedData
+      PROJECT_PATH: LastfmModern/LastfmModern.xcodeproj
+      SCHEME: LastfmModern
+      APP_NAME: Last.fm modern.app
+
+    steps:
+      - name: Resolve release tag
+        id: release
+        run: |
+          if [ "${{ github.event_name }}" = "release" ]; then
+            echo "tag=${{ github.event.release.tag_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "tag=${{ inputs.tag }}" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Check out release source
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release.outputs.tag }}
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app/Contents/Developer
+
+      - name: Build Release app
+        run: |
+          xcodebuild \
+            -project "$PROJECT_PATH" \
+            -scheme "$SCHEME" \
+            -configuration Release \
+            -destination 'platform=macOS' \
+            -derivedDataPath "$DERIVED_DATA_PATH" \
+            CODE_SIGNING_ALLOWED=NO \
+            build
+
+      - name: Package app
+        id: package
+        run: |
+          VERSION="${{ steps.release.outputs.tag }}"
+          APP_PATH="$DERIVED_DATA_PATH/Build/Products/Release/$APP_NAME"
+          ZIP_NAME="LastfmModern-${VERSION}-macOS.zip"
+          ZIP_PATH="$RUNNER_TEMP/$ZIP_NAME"
+
+          test -d "$APP_PATH"
+          ditto -c -k --keepParent "$APP_PATH" "$ZIP_PATH"
+
+          echo "zip_path=$ZIP_PATH" >> "$GITHUB_OUTPUT"
+          echo "zip_name=$ZIP_NAME" >> "$GITHUB_OUTPUT"
+
+      - name: Upload release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release upload \
+            "${{ steps.release.outputs.tag }}" \
+            "${{ steps.package.outputs.zip_path }}#${{ steps.package.outputs.zip_name }}" \
+            --clobber
