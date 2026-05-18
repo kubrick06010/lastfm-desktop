@@ -2015,19 +2015,29 @@ final class LastfmAPIStub: LastfmAPI {
     func fetchFriendsListening(limit: Int) async throws -> [LastfmFriendListening] {
         let count = max(1, min(limit, 6))
         return (0..<count).map { index in
-            LastfmFriendListening(
-                id: "friend-\(index)",
-                user: "friend\(index + 1)",
+            let friendId = "friend-\(index)"
+            let username = "friend\(index + 1)"
+            let isSubscriber = index % 3 == 0
+            let type: String = index % 3 == 0 ? "subscriber" : (index % 5 == 0 ? "alum" : "user")
+            let hasTrack = index % 2 == 0
+            let trackName: String? = hasTrack ? "Track \(index + 1)" : nil
+            let artistName: String? = hasTrack ? "Artist \(index + 1)" : nil
+            let date = Date().addingTimeInterval(TimeInterval(-index * 420))
+            let isNowPlaying = index == 0
+
+            return LastfmFriendListening(
+                id: friendId,
+                user: username,
                 realname: nil,
                 country: "Unknown",
-                isSubscriber: index % 3 == 0,
-                accountType: index % 3 == 0 ? "subscriber" : (index % 5 == 0 ? "alum" : "user"),
+                isSubscriber: isSubscriber,
+                accountType: type,
                 avatarURL: nil,
-                track: index % 2 == 0 ? "Track \(index + 1)" : nil,
-                artist: index % 2 == 0 ? "Artist \(index + 1)" : nil,
+                track: trackName,
+                artist: artistName,
                 imageURL: nil,
-                playedAt: Date().addingTimeInterval(TimeInterval(-index * 420)),
-                nowPlaying: index == 0
+                playedAt: date,
+                nowPlaying: isNowPlaying
             )
         }
     }
