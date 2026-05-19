@@ -1486,9 +1486,8 @@ private struct ProfileView: View {
     }
 
     private func badgeView(_ type: String, fontSize: CGFloat, horizontal: CGFloat, vertical: CGFloat) -> some View {
-        let normalized = type.lowercased()
-        let label = normalized == "alum" ? "ALUM" : "LAST.FM PRO"
-        let fill: AnyShapeStyle = normalized == "alum"
+        let label = type.uppercased()
+        let fill: AnyShapeStyle = label == "ALUM"
             ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.55, green: 0.14, blue: 1.0), Color(red: 0.70, green: 0.26, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
             : AnyShapeStyle(Color.black)
 
@@ -3282,9 +3281,8 @@ private struct FriendsView: View {
     }
 
     private func badgeView(_ type: String, fontSize: CGFloat, horizontal: CGFloat, vertical: CGFloat) -> some View {
-        let normalized = type.lowercased()
-        let label = normalized == "alum" ? "ALUM" : "LAST.FM PRO"
-        let fill: AnyShapeStyle = normalized == "alum"
+        let label = type.uppercased()
+        let fill: AnyShapeStyle = label == "ALUM"
             ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.55, green: 0.14, blue: 1.0), Color(red: 0.70, green: 0.26, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
             : AnyShapeStyle(Color.black)
 
