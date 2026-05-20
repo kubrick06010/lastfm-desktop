@@ -56,6 +56,17 @@ private struct SocialGraphTarget: Identifiable, Equatable {
     let profileURL: String?
 }
 
+private func accountBadgeLabel(for normalizedType: String) -> String {
+    switch normalizedType {
+    case "alum":
+        return "ALUM"
+    case "subscriber":
+        return "LAST.FM PRO"
+    default:
+        return normalizedType.uppercased()
+    }
+}
+
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var scrobbleService: ScrobbleService
@@ -1479,7 +1490,7 @@ private struct ProfileView: View {
     }
 
     private func accountBadgeType(profile: LastfmUserProfile) -> String? {
-        if let raw = profile.accountType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !raw.isEmpty {
+        if let raw = profile.accountType?.trimmingCharacters(in: .whitespacesAndNewlines).lowercased(), !raw.isEmpty, raw != "user" {
             return raw
         }
         return scrobbleService.isSubscriber ? "subscriber" : nil
@@ -1487,7 +1498,7 @@ private struct ProfileView: View {
 
     private func badgeView(_ type: String, fontSize: CGFloat, horizontal: CGFloat, vertical: CGFloat) -> some View {
         let normalized = type.lowercased()
-        let label = normalized == "alum" ? "ALUM" : "LAST.FM PRO"
+        let label = accountBadgeLabel(for: normalized)
         let fill: AnyShapeStyle = normalized == "alum"
             ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.55, green: 0.14, blue: 1.0), Color(red: 0.70, green: 0.26, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
             : AnyShapeStyle(Color.black)
@@ -3283,7 +3294,7 @@ private struct FriendsView: View {
 
     private func badgeView(_ type: String, fontSize: CGFloat, horizontal: CGFloat, vertical: CGFloat) -> some View {
         let normalized = type.lowercased()
-        let label = normalized == "alum" ? "ALUM" : "LAST.FM PRO"
+        let label = accountBadgeLabel(for: normalized)
         let fill: AnyShapeStyle = normalized == "alum"
             ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.55, green: 0.14, blue: 1.0), Color(red: 0.70, green: 0.26, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
             : AnyShapeStyle(Color.black)
@@ -3479,7 +3490,7 @@ private struct NeighboursView: View {
 
     private func badgeView(_ type: String) -> some View {
         let normalized = type.lowercased()
-        let label = normalized == "alum" ? "ALUM" : "LAST.FM PRO"
+        let label = accountBadgeLabel(for: normalized)
         let fill: AnyShapeStyle = normalized == "alum"
             ? AnyShapeStyle(LinearGradient(colors: [Color(red: 0.55, green: 0.14, blue: 1.0), Color(red: 0.70, green: 0.26, blue: 1.0)], startPoint: .leading, endPoint: .trailing))
             : AnyShapeStyle(Color.black)
