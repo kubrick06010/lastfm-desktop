@@ -3,18 +3,18 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 54;
+	objectVersion = 77;
 	objects = {
 
 /* Begin PBXBuildFile section */
 		02745FBE08A29F5A96E4E17D /* PlayerNormalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72612633A568EC16C6689426 /* PlayerNormalization.swift */; };
+		0709CF682FCA6B98E4A3AFCA /* LastfmAccountsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62A26B258FAF4EE4169B779 /* LastfmAccountsStore.swift */; };
 		0AE7C3C7DB8F83D3F0F2FD4C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 084ACD419AA7A9C9A4D53A6E /* ContentView.swift */; };
 		1079E9D9FF8F87625FECC2E6 /* PlayerNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83578846E1C13C196BCE5C13 /* PlayerNormalizationTests.swift */; };
 		2FA00C7A6AA3295659CA91A7 /* ScrobbleServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07EFD20E620A0A65AB20ABB /* ScrobbleServiceTests.swift */; };
-		34C747A2FA04664611A2F282 /* LastfmAccountsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 972F10C6AB1D594AF9733157 /* LastfmAccountsStore.swift */; };
-		4B8A7B0D2A7CC1719D5AF1D1 /* LaunchAtLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4B8A7B0C2A7CC1719D5AF1D1 /* LaunchAtLoginController.swift */; };
-		63A5A8BE0CFCA21E59010A2B /* ProxySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 63A5A8BD0CFCA21E59010A2B /* ProxySettings.swift */; };
-		6B9C719ED89BE929B8617D85 /* MoodPaletteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B9C719DD89BE929B8617D85 /* MoodPaletteEngine.swift */; };
+		32A49E48110BFADD4DCE3715 /* LaunchAtLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 537BF630D662AFB8400A1A6F /* LaunchAtLoginController.swift */; };
+		6B360E6319E430DA2B5AF368 /* MoodPaletteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F081E0C7BD0069BFC482C747 /* MoodPaletteEngine.swift */; };
+		6FBE7EB35110E7C41A6ED436 /* ProxySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 480A7BE95859A3596467C910 /* ProxySettings.swift */; };
 		85C51EBC631F286770D3E38A /* ScrobbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770A8738C831B64EDC9F712E /* ScrobbleService.swift */; };
 		868719F5D9B4B680C31C4770 /* PlayerMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */; };
 		B378919371396C01B332FD7E /* LastfmAPIErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F39BAA8098761BB8D27B1E /* LastfmAPIErrorTests.swift */; };
@@ -43,23 +43,23 @@
 		0F7C746DA58DD1528F775CB1 /* ScrobbleQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleQueueStore.swift; sourceTree = "<group>"; };
 		2E67118C04C7E83F141A2226 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2F2CAD7EEE66A29949B944A4 /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
+		480A7BE95859A3596467C910 /* ProxySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxySettings.swift; sourceTree = "<group>"; };
+		537BF630D662AFB8400A1A6F /* LaunchAtLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginController.swift; sourceTree = "<group>"; };
 		5D0366E9732BBF7659218C63 /* LastfmSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmSignatureTests.swift; sourceTree = "<group>"; };
 		6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerMonitor.swift; sourceTree = "<group>"; };
-		6B9C719DD89BE929B8617D85 /* MoodPaletteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodPaletteEngine.swift; sourceTree = "<group>"; };
 		72612633A568EC16C6689426 /* PlayerNormalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerNormalization.swift; sourceTree = "<group>"; };
 		770A8738C831B64EDC9F712E /* ScrobbleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleService.swift; sourceTree = "<group>"; };
 		83578846E1C13C196BCE5C13 /* PlayerNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerNormalizationTests.swift; sourceTree = "<group>"; };
 		93CA46DD334779024B29A170 /* LastfmModern.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LastfmModern.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		972F10C6AB1D594AF9733157 /* LastfmAccountsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAccountsStore.swift; sourceTree = "<group>"; };
-		4B8A7B0C2A7CC1719D5AF1D1 /* LaunchAtLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginController.swift; sourceTree = "<group>"; };
-		63A5A8BD0CFCA21E59010A2B /* ProxySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxySettings.swift; sourceTree = "<group>"; };
 		98F39BAA8098761BB8D27B1E /* LastfmAPIErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPIErrorTests.swift; sourceTree = "<group>"; };
 		A7D4EAA843A3ED01728DA93D /* LastfmAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPI.swift; sourceTree = "<group>"; };
 		B5F146F28683F5214FDD43C2 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
 		BF02D4D4561BB6F4204B54F2 /* LastfmModernTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LastfmModernTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		C7865CB60DD9C802C8E94E92 /* LastfmModernApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmModernApp.swift; sourceTree = "<group>"; };
 		CCE2B2CE001BD6762C752741 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		D62A26B258FAF4EE4169B779 /* LastfmAccountsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAccountsStore.swift; sourceTree = "<group>"; };
 		F07EFD20E620A0A65AB20ABB /* ScrobbleServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleServiceTests.swift; sourceTree = "<group>"; };
+		F081E0C7BD0069BFC482C747 /* MoodPaletteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodPaletteEngine.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
@@ -93,13 +93,13 @@
 		931876567F55CE7C9B55F199 /* Services */ = {
 			isa = PBXGroup;
 			children = (
+				D62A26B258FAF4EE4169B779 /* LastfmAccountsStore.swift */,
 				A7D4EAA843A3ED01728DA93D /* LastfmAPI.swift */,
-				972F10C6AB1D594AF9733157 /* LastfmAccountsStore.swift */,
-				4B8A7B0C2A7CC1719D5AF1D1 /* LaunchAtLoginController.swift */,
-				6B9C719DD89BE929B8617D85 /* MoodPaletteEngine.swift */,
+				537BF630D662AFB8400A1A6F /* LaunchAtLoginController.swift */,
+				F081E0C7BD0069BFC482C747 /* MoodPaletteEngine.swift */,
 				6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */,
 				72612633A568EC16C6689426 /* PlayerNormalization.swift */,
-				63A5A8BD0CFCA21E59010A2B /* ProxySettings.swift */,
+				480A7BE95859A3596467C910 /* ProxySettings.swift */,
 				0F7C746DA58DD1528F775CB1 /* ScrobbleQueueStore.swift */,
 				770A8738C831B64EDC9F712E /* ScrobbleService.swift */,
 			);
@@ -205,7 +205,6 @@
 				};
 			};
 			buildConfigurationList = B5DD8A06A0D7B5EA6DAAB0ED /* Build configuration list for PBXProject "LastfmModern" */;
-			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -214,7 +213,8 @@
 			);
 			mainGroup = 997F3B0D5DCD7B9D36BD9ACA;
 			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 54;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = E15FF985D1E1E9BA316E899D /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
@@ -242,14 +242,14 @@
 			files = (
 				0AE7C3C7DB8F83D3F0F2FD4C /* ContentView.swift in Sources */,
 				BF2734264320C21B1E11BDA8 /* LastfmAPI.swift in Sources */,
-				34C747A2FA04664611A2F282 /* LastfmAccountsStore.swift in Sources */,
-				4B8A7B0D2A7CC1719D5AF1D1 /* LaunchAtLoginController.swift in Sources */,
+				0709CF682FCA6B98E4A3AFCA /* LastfmAccountsStore.swift in Sources */,
 				C74EFBD1B57C39E53FFF120F /* LastfmModernApp.swift in Sources */,
+				32A49E48110BFADD4DCE3715 /* LaunchAtLoginController.swift in Sources */,
+				6B360E6319E430DA2B5AF368 /* MoodPaletteEngine.swift in Sources */,
 				E89F4220EBD07EB6A4E571F3 /* NowPlayingView.swift in Sources */,
 				868719F5D9B4B680C31C4770 /* PlayerMonitor.swift in Sources */,
-				6B9C719ED89BE929B8617D85 /* MoodPaletteEngine.swift in Sources */,
 				02745FBE08A29F5A96E4E17D /* PlayerNormalization.swift in Sources */,
-				63A5A8BE0CFCA21E59010A2B /* ProxySettings.swift in Sources */,
+				6FBE7EB35110E7C41A6ED436 /* ProxySettings.swift in Sources */,
 				FD67A808AA089C42E501248E /* ScrobbleQueueStore.swift in Sources */,
 				85C51EBC631F286770D3E38A /* ScrobbleService.swift in Sources */,
 				F185FFBF38B2CDC185F55745 /* SettingsView.swift in Sources */,
@@ -312,7 +312,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_NAME = "Last.fm modern";
+				PRODUCT_NAME = LastfmModern;
 				SDKROOT = macosx;
 			};
 			name = Release;
@@ -332,7 +332,7 @@
 					"@executable_path/../Frameworks",
 				);
 				MACOSX_DEPLOYMENT_TARGET = 13.0;
-				PRODUCT_NAME = "Last.fm modern";
+				PRODUCT_NAME = LastfmModern;
 				SDKROOT = macosx;
 			};
 			name = Debug;
