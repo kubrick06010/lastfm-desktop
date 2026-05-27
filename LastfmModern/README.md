@@ -5,6 +5,7 @@ Modern macOS Last.fm desktop client built with SwiftUI.
 ## Requirements
 
 - macOS with Xcode installed.
+- Xcode 26.5 is the currently validated toolchain. Older Xcode versions may not open or test the generated project file correctly.
 
 ## Configuration
 

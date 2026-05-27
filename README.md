@@ -13,6 +13,7 @@ Use this for current development.
 
 - Project: `LastfmModern/LastfmModern.xcodeproj`
 - Platform: macOS (Xcode)
+- Xcode: currently validated with Xcode 26.5. The generated project may require a recent Xcode version.
 - Runtime mode:
   - Live Last.fm API mode with built-in app credentials (default end-user flow).
   - Optional developer override via environment variables.
