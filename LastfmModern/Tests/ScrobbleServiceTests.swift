@@ -169,6 +169,7 @@ private final class MockAPI: LastfmAPI {
     var nowPlayingTracks: [Track] = []
     var isConfigured: Bool = true
     var isAuthenticated: Bool = true
+    var sessionUsername: String? { "tester" }
     var scrobbledTracks: [Track] = []
     var scrobbleFailuresRemaining: Int
     var scrobbleAttempts = 0
@@ -258,6 +259,14 @@ private final class MockAPI: LastfmAPI {
         )
     }
 
+    func fetchSimilarTracks(artist: String, track: String, limit: Int) async throws -> [LastfmSimilarTrack] {
+        []
+    }
+
+    func fetchSimilarAlbums(artist: String, album: String, limit: Int) async throws -> [LastfmSimilarAlbum] {
+        []
+    }
+
     func fetchUserProfile() async throws -> LastfmUserProfile {
         LastfmUserProfile(
             name: "tester",
@@ -269,7 +278,8 @@ private final class MockAPI: LastfmAPI {
             country: nil,
             url: nil,
             imageURL: nil,
-            registeredAt: nil
+            registeredAt: nil,
+            accountType: nil
         )
     }
 
@@ -294,6 +304,7 @@ private final class MockAPI: LastfmAPI {
             realname: nil,
             country: nil,
             isSubscriber: false,
+            accountType: nil,
             avatarURL: nil,
             track: "Track",
             artist: "Artist",
@@ -301,6 +312,14 @@ private final class MockAPI: LastfmAPI {
             playedAt: .now,
             nowPlaying: true
         )]
+    }
+
+    func fetchNeighbours(limit: Int) async throws -> [LastfmNeighbour] {
+        []
+    }
+
+    func fetchFriendUsernames(user: String, limit: Int) async throws -> [String] {
+        []
     }
 
     func fetchTopArtists(period: LastfmTopArtistPeriod, limit: Int) async throws -> [LastfmTopArtist] {
@@ -331,7 +350,7 @@ private final class TestMonitor: PlayerMonitor {
     }
 }
 
-private final class InMemorySessionStore: LastfmSessionStoring {
+private final class InMemorySessionStore: LastfmAccountsStoring {
     private var session: LastfmSession?
 
     func save(_ session: LastfmSession) {
@@ -344,6 +363,20 @@ private final class InMemorySessionStore: LastfmSessionStoring {
 
     func clear() {
         session = nil
+    }
+
+    func allSessions() -> [LastfmSession] {
+        session.map { [$0] } ?? []
+    }
+
+    func setActive(username: String?) {
+        // Simple mock doesn't handle multiple accounts deeply
+    }
+
+    func remove(username: String) {
+        if session?.name == username {
+            session = nil
+        }
     }
 }
 
