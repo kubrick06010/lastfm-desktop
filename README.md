@@ -18,7 +18,7 @@ Use this for current development.
   - Live Last.fm API mode with built-in app credentials (default end-user flow).
   - Optional developer override via environment variables.
 
-See full app documentation in [LastfmModern/README.md](/Users/haa/Desktop/projects/lastfm-desktop/LastfmModern/README.md).
+See full app documentation in [LastfmModern/README.md](LastfmModern/README.md).
 
 Recent UI direction worth noting:
 - The right-hand detail inspector is contextual by entity type and no longer reuses artist-only related content for tracks/albums.
@@ -57,6 +57,13 @@ xcodebuild \
 - `LastfmModern/`: SwiftUI macOS app (active).
 - `liblastfm/`: optional local reference checkout of `lastfm/liblastfm` kept out of version control.
 - `app/`, `common/`, `plugins/`, `lib/`: legacy Qt desktop client code.
+
+## Engineering practices
+
+Future work should follow [docs/ENGINEERING_PRACTICES.md](docs/ENGINEERING_PRACTICES.md).
+The practices adapt the OpenScrobbler workflow to this repository: `LastfmModern`
+is the active app, legacy Qt code is maintained conservatively, and current
+oversized Swift files should be reduced through incremental, tested extraction.
 
 ## Legacy Qt client status
 

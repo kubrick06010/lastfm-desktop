@@ -2,6 +2,12 @@
 
 Modern macOS Last.fm desktop client built with SwiftUI.
 
+Development practices for this app live in
+[`../docs/ENGINEERING_PRACTICES.md`](../docs/ENGINEERING_PRACTICES.md).
+New work should prefer focused feature files and avoid adding unrelated behavior
+to the current oversized `ContentView.swift`, `LastfmAPI.swift`, and
+`ScrobbleService.swift` files.
+
 ## Requirements
 
 - macOS with Xcode installed.
