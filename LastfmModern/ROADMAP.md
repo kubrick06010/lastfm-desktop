@@ -9,6 +9,8 @@
 - Legacy app remains the behavior reference in `app/client`, `lib/listener`, and `lib/unicorn`.
 - `liblastfm` may be checked out locally for protocol/behavior reference, but is not part of the tracked repo.
 - `LastfmModern/` is the active product and ships as a native macOS SwiftUI app.
+- Engineering practices are now documented in `../docs/ENGINEERING_PRACTICES.md`.
+- The active Swift codebase has been regularized into focused files; no current Swift source file is above the documented 600-line review threshold.
 
 ## Scope Priorities
 1. Authentication/session management.
@@ -18,13 +20,17 @@
 5. Settings and diagnostics.
 
 ## Architecture Plan
-- UI: SwiftUI views (`ContentView`, `NowPlayingView`, future settings/wizard views).
+- UI: SwiftUI feature views split by responsibility.
+  - `ContentView` owns shell composition, navigation, modal state, and feature wiring.
+  - Feature surfaces live in focused files such as `DashboardView`, `ScrobblesView`, `ReportsView`, `ChartsView`, `FriendsView`, and `NeighboursView`.
+  - Shared presentation helpers live in focused UI support files.
 - App shell: `@main` app + `MenuBarExtra`.
-- Domain: lightweight models (`Track`, session models).
+- Domain: lightweight models such as `Track` and `SocialGraph`.
 - Services:
-  - `LastfmAPI` (auth + now playing + scrobble).
+  - `LastfmAPI` protocol, config, errors, and typed value models.
+  - `LastfmAPIClient` split by auth, scrobbling, metadata, profile, social, transport, and web fallback behavior.
   - `PlayerMonitor` (Apple Music/Spotify/system listeners via adapters).
-  - `ScrobbleService` orchestration + business rules.
+  - `ScrobbleService` orchestration split by account/session, inspection, playback queue, refresh, and social graph behavior.
   - `LastfmAccountsStore` persistence for multi-account session management.
   - `ProxySettingsStore` and launch-at-login controller for app shell behavior.
 
@@ -67,19 +73,30 @@
   - artist -> similar artists
   - track -> similar tracks
   - album -> similar albums
+- UI structure regularized so each major tab and shared helper has a focused source file.
 - Remaining work:
   - broader responsive pass across all tabs
   - VLC integration
   - optional fingerprinting reintroduction
   - tighter visual QA for light mode and ultra-wide layouts
 
-6. Hardening + Release (In Progress)
+6. Engineering Hardening (In Progress)
+- Engineering practices document added and applied to the active codebase.
+- Oversized `ContentView`, `LastfmAPI`, and `ScrobbleService` files split into focused source files.
+- Current automated suite passes after the structural refactor.
+- Remaining work:
+  - migrate stable Last.fm response parsing from dynamic `[String: Any]` dictionaries toward `Decodable` request/response models
+  - add endpoint-level tests for metadata, profile, friends, neighbours, and fallback parsing
+  - add focused tests around account switching, proxy transport selection, and social graph computation
+  - reduce broad shared mutable state in `ScrobbleService` where narrower collaborators become worthwhile
+
+7. Release + Distribution (In Progress)
 - Logging/diagnostics screen implemented.
 - Ongoing release packaging via GitHub releases.
 - Remaining work:
-  - stronger automated test coverage for queue/session/networking
   - signing/notarization pipeline
   - enterprise polish (proxy credential storage, deployment guidance)
+  - release checklist that ties version bumps, tests, packaging, and GitHub release assets together
 
 ## Risks and Mitigations
 - Player integration differences across macOS versions:
@@ -88,6 +105,10 @@
   - Mitigate with explicit state machine and error surfacing.
 - Legacy behavior drift:
   - Mitigate via feature parity checklist and targeted regression tests.
+- Last.fm response and web fallback variability:
+  - Mitigate with typed decoding where stable, deterministic fallbacks where loose, and fixture-based tests.
+- Service state complexity:
+  - Mitigate by keeping future changes in the existing extension boundaries and extracting narrower collaborators only with behavior-preserving tests.
 
 ## Definition of Done (Phase 1)
 - User can sign in with Last.fm credentials.
@@ -95,3 +116,9 @@
 - App can queue and submit scrobbles with visible status.
 - Session survives app restart.
 - Preferences cover the operational essentials: accounts, proxy, startup behavior, advanced controls.
+
+## Definition of Done (Quality Baseline)
+- New Swift source files stay under the documented size threshold unless there is a clear architectural reason.
+- Existing feature/service boundaries remain intact when adding behavior.
+- Service, parsing, queue, session, and migration-sensitive changes include targeted tests.
+- The active macOS test command succeeds before release-facing changes are merged.
