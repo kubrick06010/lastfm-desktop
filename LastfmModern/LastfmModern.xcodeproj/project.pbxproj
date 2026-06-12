@@ -7,20 +7,51 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		001767467AB4F83A0D1FA5A6 /* AppPresentationSupport.swift in Sources */ = {isa = PBXBuildFile; fileRef = DBB143D37E4437F508F7CBC8 /* AppPresentationSupport.swift */; };
 		02745FBE08A29F5A96E4E17D /* PlayerNormalization.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72612633A568EC16C6689426 /* PlayerNormalization.swift */; };
 		0709CF682FCA6B98E4A3AFCA /* LastfmAccountsStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = D62A26B258FAF4EE4169B779 /* LastfmAccountsStore.swift */; };
+		08A036AB438E47BC172C8F39 /* LastfmAPIStub.swift in Sources */ = {isa = PBXBuildFile; fileRef = CF8A50C24C52B34308CECCCD /* LastfmAPIStub.swift */; };
+		091E860D1DE14C86FA28B918 /* FlowLayout.swift in Sources */ = {isa = PBXBuildFile; fileRef = C1F36D92EE01B457ED564576 /* FlowLayout.swift */; };
 		0AE7C3C7DB8F83D3F0F2FD4C /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 084ACD419AA7A9C9A4D53A6E /* ContentView.swift */; };
+		0B0E3D155D50C39AE64DDB82 /* LastfmAPIClient+Scrobbling.swift in Sources */ = {isa = PBXBuildFile; fileRef = 45980F4E98AC37B49A84A091 /* LastfmAPIClient+Scrobbling.swift */; };
+		0BB5C5A63888AF37C4C4E019 /* ChartsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = D713E10F057606E00893E981 /* ChartsView.swift */; };
 		1079E9D9FF8F87625FECC2E6 /* PlayerNormalizationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 83578846E1C13C196BCE5C13 /* PlayerNormalizationTests.swift */; };
+		241140DE4763A7C6273E7141 /* LastfmAPIClient+Metadata.swift in Sources */ = {isa = PBXBuildFile; fileRef = F7A3C532473F274E1BBFE2EF /* LastfmAPIClient+Metadata.swift */; };
+		260DD0011828F51849DAC633 /* ExploreView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 257546BE130BDDEAC81630C3 /* ExploreView.swift */; };
+		2F6EAAA79D19B54086B567EA /* LastfmAPIClient+Auth.swift in Sources */ = {isa = PBXBuildFile; fileRef = 15F81A28A211980595C19135 /* LastfmAPIClient+Auth.swift */; };
 		2FA00C7A6AA3295659CA91A7 /* ScrobbleServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F07EFD20E620A0A65AB20ABB /* ScrobbleServiceTests.swift */; };
 		32A49E48110BFADD4DCE3715 /* LaunchAtLoginController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 537BF630D662AFB8400A1A6F /* LaunchAtLoginController.swift */; };
+		364CBF72F61A2BD389501C08 /* LastfmAPIClient+Social.swift in Sources */ = {isa = PBXBuildFile; fileRef = 859A2C2E4A38FEC5DCE5823D /* LastfmAPIClient+Social.swift */; };
+		3B044C3527EB04471F909230 /* ScrobbleService+PlaybackQueue.swift in Sources */ = {isa = PBXBuildFile; fileRef = 74C0C2E2CCE94663FE605207 /* ScrobbleService+PlaybackQueue.swift */; };
+		49B6DE8A213CFE9F2667EBE7 /* InspectorResizeHandle.swift in Sources */ = {isa = PBXBuildFile; fileRef = CD66583598398554396F95A4 /* InspectorResizeHandle.swift */; };
+		596C138C39A8ED4F85794960 /* ScrobbleService+Account.swift in Sources */ = {isa = PBXBuildFile; fileRef = 13DAEC02CDD72EF31B43ACD0 /* ScrobbleService+Account.swift */; };
+		5B0B7D75E8A9BD0A139B293E /* LastfmURLSession.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3EBBA1FCE4F7D36C78D7C70C /* LastfmURLSession.swift */; };
+		5F039E9734F133DE2F80A06D /* WorkspaceChromeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = FBE0D9C147138F6B284DA6ED /* WorkspaceChromeView.swift */; };
+		6311A101CB2ED17C02712EE8 /* ScrobblesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5160C22A66538785436F4E98 /* ScrobblesView.swift */; };
 		6B360E6319E430DA2B5AF368 /* MoodPaletteEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = F081E0C7BD0069BFC482C747 /* MoodPaletteEngine.swift */; };
+		6F129D1A28E95007C14A519C /* QueueView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4BB5F4373A38CA26EBFC2E24 /* QueueView.swift */; };
 		6FBE7EB35110E7C41A6ED436 /* ProxySettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 480A7BE95859A3596467C910 /* ProxySettings.swift */; };
+		71980F4AEA1D72DA380F4D40 /* ProfileView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5EB851D04C408AAAC5A66166 /* ProfileView.swift */; };
+		729805FCD7C61B717EC15329 /* SocialGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3CDAAF1598651F3922070681 /* SocialGraph.swift */; };
 		85C51EBC631F286770D3E38A /* ScrobbleService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 770A8738C831B64EDC9F712E /* ScrobbleService.swift */; };
 		868719F5D9B4B680C31C4770 /* PlayerMonitor.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */; };
+		9111967CEE858F1DFEE359E7 /* ScrobbleService+SocialGraph.swift in Sources */ = {isa = PBXBuildFile; fileRef = BAEE4932B4E5237CAFA96A94 /* ScrobbleService+SocialGraph.swift */; };
+		9A4F65EC9521A3A1F64EEAF3 /* ScrobbleDetailPanel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 046F3E4230C3B108B9233925 /* ScrobbleDetailPanel.swift */; };
+		A420C51C2FDDCD37BE7B3088 /* AccountView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A20656BBE50E076F1957FD63 /* AccountView.swift */; };
+		ABBFDD8C5A709CF439D84BD0 /* ScrobbleService+Refresh.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50E3BE15D2141F87DE4336E3 /* ScrobbleService+Refresh.swift */; };
 		B378919371396C01B332FD7E /* LastfmAPIErrorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 98F39BAA8098761BB8D27B1E /* LastfmAPIErrorTests.swift */; };
 		BF2734264320C21B1E11BDA8 /* LastfmAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = A7D4EAA843A3ED01728DA93D /* LastfmAPI.swift */; };
+		C25A84126B6070577AAF650C /* FriendsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B988CE2311EE3DAF324F43C9 /* FriendsView.swift */; };
 		C74EFBD1B57C39E53FFF120F /* LastfmModernApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C7865CB60DD9C802C8E94E92 /* LastfmModernApp.swift */; };
+		D03C463D67F0DA0A61510B4D /* ReportsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220DF5F79E91062EDCA7E052 /* ReportsView.swift */; };
+		D180583CB2016EF6380D456C /* LastfmAPIClient+Web.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4F420FBA1E68C5473433C100 /* LastfmAPIClient+Web.swift */; };
+		D4DE7D722D14943CC7213848 /* LastfmAPITypes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 61DB49E43AC0CF40CEE42667 /* LastfmAPITypes.swift */; };
+		DA421A2CB3DCDE67C80CD09F /* NeighboursView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 31149AA521E0A52151BF2743 /* NeighboursView.swift */; };
+		DC3938EF45EF3950E28AC20A /* LastfmAPIClient+Profile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5B8E3B6673BCBF56C5B65059 /* LastfmAPIClient+Profile.swift */; };
+		E2784EF5F4328FC07EAB4CB8 /* LastfmAPIClient+Transport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0DB425E45ECCDEB935166307 /* LastfmAPIClient+Transport.swift */; };
+		E6A0931B9332CB36D7A1A7E1 /* DashboardView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7122F6B3E81194347DB9984B /* DashboardView.swift */; };
 		E89F4220EBD07EB6A4E571F3 /* NowPlayingView.swift in Sources */ = {isa = PBXBuildFile; fileRef = B5F146F28683F5214FDD43C2 /* NowPlayingView.swift */; };
+		EC123B31299FA158253A3731 /* ScrobbleService+Inspection.swift in Sources */ = {isa = PBXBuildFile; fileRef = 873F0D3A80F2ECACBE03526A /* ScrobbleService+Inspection.swift */; };
 		F185FFBF38B2CDC185F55745 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = CCE2B2CE001BD6762C752741 /* SettingsView.swift */; };
 		F964CBF582DE6064EFED8AA4 /* LastfmSignatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5D0366E9732BBF7659218C63 /* LastfmSignatureTests.swift */; };
 		FA2489A06875F4B91327A193 /* Track.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2F2CAD7EEE66A29949B944A4 /* Track.swift */; };
@@ -39,33 +70,65 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+		046F3E4230C3B108B9233925 /* ScrobbleDetailPanel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleDetailPanel.swift; sourceTree = "<group>"; };
 		084ACD419AA7A9C9A4D53A6E /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		0DB425E45ECCDEB935166307 /* LastfmAPIClient+Transport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LastfmAPIClient+Transport.swift"; sourceTree = "<group>"; };
 		0F7C746DA58DD1528F775CB1 /* ScrobbleQueueStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleQueueStore.swift; sourceTree = "<group>"; };
+		13DAEC02CDD72EF31B43ACD0 /* ScrobbleService+Account.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScrobbleService+Account.swift"; sourceTree = "<group>"; };
+		15F81A28A211980595C19135 /* LastfmAPIClient+Auth.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LastfmAPIClient+Auth.swift"; sourceTree = "<group>"; };
+		220DF5F79E91062EDCA7E052 /* ReportsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportsView.swift; sourceTree = "<group>"; };
+		257546BE130BDDEAC81630C3 /* ExploreView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ExploreView.swift; sourceTree = "<group>"; };
 		2E67118C04C7E83F141A2226 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		2F2CAD7EEE66A29949B944A4 /* Track.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Track.swift; sourceTree = "<group>"; };
+		31149AA521E0A52151BF2743 /* NeighboursView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NeighboursView.swift; sourceTree = "<group>"; };
+		3CDAAF1598651F3922070681 /* SocialGraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SocialGraph.swift; sourceTree = "<group>"; };
+		3EBBA1FCE4F7D36C78D7C70C /* LastfmURLSession.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmURLSession.swift; sourceTree = "<group>"; };
+		45980F4E98AC37B49A84A091 /* LastfmAPIClient+Scrobbling.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LastfmAPIClient+Scrobbling.swift"; sourceTree = "<group>"; };
 		480A7BE95859A3596467C910 /* ProxySettings.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProxySettings.swift; sourceTree = "<group>"; };
+		4BB5F4373A38CA26EBFC2E24 /* QueueView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QueueView.swift; sourceTree = "<group>"; };
+		4F420FBA1E68C5473433C100 /* LastfmAPIClient+Web.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LastfmAPIClient+Web.swift"; sourceTree = "<group>"; };
+		50E3BE15D2141F87DE4336E3 /* ScrobbleService+Refresh.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScrobbleService+Refresh.swift"; sourceTree = "<group>"; };
+		5160C22A66538785436F4E98 /* ScrobblesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobblesView.swift; sourceTree = "<group>"; };
 		537BF630D662AFB8400A1A6F /* LaunchAtLoginController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LaunchAtLoginController.swift; sourceTree = "<group>"; };
+		5B8E3B6673BCBF56C5B65059 /* LastfmAPIClient+Profile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LastfmAPIClient+Profile.swift"; sourceTree = "<group>"; };
 		5D0366E9732BBF7659218C63 /* LastfmSignatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmSignatureTests.swift; sourceTree = "<group>"; };
+		5EB851D04C408AAAC5A66166 /* ProfileView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileView.swift; sourceTree = "<group>"; };
+		61DB49E43AC0CF40CEE42667 /* LastfmAPITypes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPITypes.swift; sourceTree = "<group>"; };
 		6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerMonitor.swift; sourceTree = "<group>"; };
+		7122F6B3E81194347DB9984B /* DashboardView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DashboardView.swift; sourceTree = "<group>"; };
 		72612633A568EC16C6689426 /* PlayerNormalization.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerNormalization.swift; sourceTree = "<group>"; };
+		74C0C2E2CCE94663FE605207 /* ScrobbleService+PlaybackQueue.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScrobbleService+PlaybackQueue.swift"; sourceTree = "<group>"; };
 		770A8738C831B64EDC9F712E /* ScrobbleService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleService.swift; sourceTree = "<group>"; };
 		83578846E1C13C196BCE5C13 /* PlayerNormalizationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlayerNormalizationTests.swift; sourceTree = "<group>"; };
+		859A2C2E4A38FEC5DCE5823D /* LastfmAPIClient+Social.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LastfmAPIClient+Social.swift"; sourceTree = "<group>"; };
+		873F0D3A80F2ECACBE03526A /* ScrobbleService+Inspection.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScrobbleService+Inspection.swift"; sourceTree = "<group>"; };
 		93CA46DD334779024B29A170 /* LastfmModern.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = LastfmModern.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		98F39BAA8098761BB8D27B1E /* LastfmAPIErrorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPIErrorTests.swift; sourceTree = "<group>"; };
+		A20656BBE50E076F1957FD63 /* AccountView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AccountView.swift; sourceTree = "<group>"; };
 		A7D4EAA843A3ED01728DA93D /* LastfmAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPI.swift; sourceTree = "<group>"; };
 		B5F146F28683F5214FDD43C2 /* NowPlayingView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NowPlayingView.swift; sourceTree = "<group>"; };
+		B988CE2311EE3DAF324F43C9 /* FriendsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FriendsView.swift; sourceTree = "<group>"; };
+		BAEE4932B4E5237CAFA96A94 /* ScrobbleService+SocialGraph.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "ScrobbleService+SocialGraph.swift"; sourceTree = "<group>"; };
 		BF02D4D4561BB6F4204B54F2 /* LastfmModernTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = LastfmModernTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		C1F36D92EE01B457ED564576 /* FlowLayout.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FlowLayout.swift; sourceTree = "<group>"; };
 		C7865CB60DD9C802C8E94E92 /* LastfmModernApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmModernApp.swift; sourceTree = "<group>"; };
 		CCE2B2CE001BD6762C752741 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
+		CD66583598398554396F95A4 /* InspectorResizeHandle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = InspectorResizeHandle.swift; sourceTree = "<group>"; };
+		CF8A50C24C52B34308CECCCD /* LastfmAPIStub.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAPIStub.swift; sourceTree = "<group>"; };
 		D62A26B258FAF4EE4169B779 /* LastfmAccountsStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LastfmAccountsStore.swift; sourceTree = "<group>"; };
+		D713E10F057606E00893E981 /* ChartsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChartsView.swift; sourceTree = "<group>"; };
+		DBB143D37E4437F508F7CBC8 /* AppPresentationSupport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppPresentationSupport.swift; sourceTree = "<group>"; };
 		F07EFD20E620A0A65AB20ABB /* ScrobbleServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScrobbleServiceTests.swift; sourceTree = "<group>"; };
 		F081E0C7BD0069BFC482C747 /* MoodPaletteEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoodPaletteEngine.swift; sourceTree = "<group>"; };
+		F7A3C532473F274E1BBFE2EF /* LastfmAPIClient+Metadata.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = "LastfmAPIClient+Metadata.swift"; sourceTree = "<group>"; };
+		FBE0D9C147138F6B284DA6ED /* WorkspaceChromeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WorkspaceChromeView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
 		4B0E6D08689AD864D31A5EB4 /* Domain */ = {
 			isa = PBXGroup;
 			children = (
+				3CDAAF1598651F3922070681 /* SocialGraph.swift */,
 				2F2CAD7EEE66A29949B944A4 /* Track.swift */,
 			);
 			path = Domain;
@@ -95,6 +158,16 @@
 			children = (
 				D62A26B258FAF4EE4169B779 /* LastfmAccountsStore.swift */,
 				A7D4EAA843A3ED01728DA93D /* LastfmAPI.swift */,
+				15F81A28A211980595C19135 /* LastfmAPIClient+Auth.swift */,
+				F7A3C532473F274E1BBFE2EF /* LastfmAPIClient+Metadata.swift */,
+				5B8E3B6673BCBF56C5B65059 /* LastfmAPIClient+Profile.swift */,
+				45980F4E98AC37B49A84A091 /* LastfmAPIClient+Scrobbling.swift */,
+				859A2C2E4A38FEC5DCE5823D /* LastfmAPIClient+Social.swift */,
+				0DB425E45ECCDEB935166307 /* LastfmAPIClient+Transport.swift */,
+				4F420FBA1E68C5473433C100 /* LastfmAPIClient+Web.swift */,
+				CF8A50C24C52B34308CECCCD /* LastfmAPIStub.swift */,
+				61DB49E43AC0CF40CEE42667 /* LastfmAPITypes.swift */,
+				3EBBA1FCE4F7D36C78D7C70C /* LastfmURLSession.swift */,
 				537BF630D662AFB8400A1A6F /* LaunchAtLoginController.swift */,
 				F081E0C7BD0069BFC482C747 /* MoodPaletteEngine.swift */,
 				6B3AEE8B258E6E37BBC70350 /* PlayerMonitor.swift */,
@@ -102,6 +175,11 @@
 				480A7BE95859A3596467C910 /* ProxySettings.swift */,
 				0F7C746DA58DD1528F775CB1 /* ScrobbleQueueStore.swift */,
 				770A8738C831B64EDC9F712E /* ScrobbleService.swift */,
+				13DAEC02CDD72EF31B43ACD0 /* ScrobbleService+Account.swift */,
+				873F0D3A80F2ECACBE03526A /* ScrobbleService+Inspection.swift */,
+				74C0C2E2CCE94663FE605207 /* ScrobbleService+PlaybackQueue.swift */,
+				50E3BE15D2141F87DE4336E3 /* ScrobbleService+Refresh.swift */,
+				BAEE4932B4E5237CAFA96A94 /* ScrobbleService+SocialGraph.swift */,
 			);
 			path = Services;
 			sourceTree = "<group>";
@@ -127,9 +205,24 @@
 		B2B4C3FE0BC3B9F27EC62EBE /* UI */ = {
 			isa = PBXGroup;
 			children = (
+				A20656BBE50E076F1957FD63 /* AccountView.swift */,
+				DBB143D37E4437F508F7CBC8 /* AppPresentationSupport.swift */,
+				D713E10F057606E00893E981 /* ChartsView.swift */,
 				084ACD419AA7A9C9A4D53A6E /* ContentView.swift */,
+				7122F6B3E81194347DB9984B /* DashboardView.swift */,
+				257546BE130BDDEAC81630C3 /* ExploreView.swift */,
+				C1F36D92EE01B457ED564576 /* FlowLayout.swift */,
+				B988CE2311EE3DAF324F43C9 /* FriendsView.swift */,
+				CD66583598398554396F95A4 /* InspectorResizeHandle.swift */,
+				31149AA521E0A52151BF2743 /* NeighboursView.swift */,
 				B5F146F28683F5214FDD43C2 /* NowPlayingView.swift */,
+				5EB851D04C408AAAC5A66166 /* ProfileView.swift */,
+				4BB5F4373A38CA26EBFC2E24 /* QueueView.swift */,
+				220DF5F79E91062EDCA7E052 /* ReportsView.swift */,
+				046F3E4230C3B108B9233925 /* ScrobbleDetailPanel.swift */,
+				5160C22A66538785436F4E98 /* ScrobblesView.swift */,
 				CCE2B2CE001BD6762C752741 /* SettingsView.swift */,
+				FBE0D9C147138F6B284DA6ED /* WorkspaceChromeView.swift */,
 			);
 			path = UI;
 			sourceTree = "<group>";
@@ -240,20 +333,51 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A420C51C2FDDCD37BE7B3088 /* AccountView.swift in Sources */,
+				001767467AB4F83A0D1FA5A6 /* AppPresentationSupport.swift in Sources */,
+				0BB5C5A63888AF37C4C4E019 /* ChartsView.swift in Sources */,
 				0AE7C3C7DB8F83D3F0F2FD4C /* ContentView.swift in Sources */,
+				E6A0931B9332CB36D7A1A7E1 /* DashboardView.swift in Sources */,
+				260DD0011828F51849DAC633 /* ExploreView.swift in Sources */,
+				091E860D1DE14C86FA28B918 /* FlowLayout.swift in Sources */,
+				C25A84126B6070577AAF650C /* FriendsView.swift in Sources */,
+				49B6DE8A213CFE9F2667EBE7 /* InspectorResizeHandle.swift in Sources */,
 				BF2734264320C21B1E11BDA8 /* LastfmAPI.swift in Sources */,
+				2F6EAAA79D19B54086B567EA /* LastfmAPIClient+Auth.swift in Sources */,
+				241140DE4763A7C6273E7141 /* LastfmAPIClient+Metadata.swift in Sources */,
+				DC3938EF45EF3950E28AC20A /* LastfmAPIClient+Profile.swift in Sources */,
+				0B0E3D155D50C39AE64DDB82 /* LastfmAPIClient+Scrobbling.swift in Sources */,
+				364CBF72F61A2BD389501C08 /* LastfmAPIClient+Social.swift in Sources */,
+				E2784EF5F4328FC07EAB4CB8 /* LastfmAPIClient+Transport.swift in Sources */,
+				D180583CB2016EF6380D456C /* LastfmAPIClient+Web.swift in Sources */,
+				08A036AB438E47BC172C8F39 /* LastfmAPIStub.swift in Sources */,
+				D4DE7D722D14943CC7213848 /* LastfmAPITypes.swift in Sources */,
 				0709CF682FCA6B98E4A3AFCA /* LastfmAccountsStore.swift in Sources */,
 				C74EFBD1B57C39E53FFF120F /* LastfmModernApp.swift in Sources */,
+				5B0B7D75E8A9BD0A139B293E /* LastfmURLSession.swift in Sources */,
 				32A49E48110BFADD4DCE3715 /* LaunchAtLoginController.swift in Sources */,
 				6B360E6319E430DA2B5AF368 /* MoodPaletteEngine.swift in Sources */,
+				DA421A2CB3DCDE67C80CD09F /* NeighboursView.swift in Sources */,
 				E89F4220EBD07EB6A4E571F3 /* NowPlayingView.swift in Sources */,
 				868719F5D9B4B680C31C4770 /* PlayerMonitor.swift in Sources */,
 				02745FBE08A29F5A96E4E17D /* PlayerNormalization.swift in Sources */,
+				71980F4AEA1D72DA380F4D40 /* ProfileView.swift in Sources */,
 				6FBE7EB35110E7C41A6ED436 /* ProxySettings.swift in Sources */,
+				6F129D1A28E95007C14A519C /* QueueView.swift in Sources */,
+				D03C463D67F0DA0A61510B4D /* ReportsView.swift in Sources */,
+				9A4F65EC9521A3A1F64EEAF3 /* ScrobbleDetailPanel.swift in Sources */,
 				FD67A808AA089C42E501248E /* ScrobbleQueueStore.swift in Sources */,
+				596C138C39A8ED4F85794960 /* ScrobbleService+Account.swift in Sources */,
+				EC123B31299FA158253A3731 /* ScrobbleService+Inspection.swift in Sources */,
+				3B044C3527EB04471F909230 /* ScrobbleService+PlaybackQueue.swift in Sources */,
+				ABBFDD8C5A709CF439D84BD0 /* ScrobbleService+Refresh.swift in Sources */,
+				9111967CEE858F1DFEE359E7 /* ScrobbleService+SocialGraph.swift in Sources */,
 				85C51EBC631F286770D3E38A /* ScrobbleService.swift in Sources */,
+				6311A101CB2ED17C02712EE8 /* ScrobblesView.swift in Sources */,
 				F185FFBF38B2CDC185F55745 /* SettingsView.swift in Sources */,
+				729805FCD7C61B717EC15329 /* SocialGraph.swift in Sources */,
 				FA2489A06875F4B91327A193 /* Track.swift in Sources */,
+				5F039E9734F133DE2F80A06D /* WorkspaceChromeView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

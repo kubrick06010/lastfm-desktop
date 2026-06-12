@@ -53,23 +53,18 @@ feature folder such as `Dashboard`, `Scrobbles`, `Profile`, `Friends`, `Queue`,
 
 ## Current State And Migration
 
-The active app already has useful behavior, but several files are intentionally
-above the target size while the app is being stabilized:
-
-- `LastfmModern/Sources/UI/ContentView.swift`
-- `LastfmModern/Sources/Services/LastfmAPI.swift`
-- `LastfmModern/Sources/Services/ScrobbleService.swift`
-
-Do not add unrelated behavior to these files just because that is where similar
-code currently lives. For new work:
+The active app has been split into focused Swift files. Keep that structure
+intact as new behavior lands:
 
 1. Add new feature UI in a focused file or feature folder.
-2. Extract existing `ContentView` subviews unchanged before redesigning them.
+2. Keep `ContentView` focused on shell, navigation, modal state, and feature
+   wiring.
 3. Move reusable UI into `Sources/UI/Components` only when it is truly generic.
-4. Split `LastfmAPI` by endpoint family or request/response grouping when a
-   change touches a coherent API area.
-5. Split `ScrobbleService` by queueing, submission, retry, and player-state
-   coordination only in behavior-preserving steps with tests.
+4. Keep Last.fm API behavior split by endpoint family, transport, and shared
+   parsing helpers.
+5. Keep scrobbling behavior split by account/session, inspection, refresh,
+   social graph, and playback/queue coordination.
+6. When a file approaches 600 lines, split it before adding unrelated behavior.
 
 ## File Size And Boundaries
 
@@ -156,7 +151,7 @@ toolchain was unavailable.
 
 - Does each changed file still have one clear responsibility?
 - Did new behavior land near the feature or service it belongs to?
-- Did we avoid adding more unrelated code to the known oversized files?
+- Did we avoid growing any file past the documented size boundary?
 - Are shared components generic enough to justify living in `Components`?
 - Are user actions reachable through visible controls, menus, or keyboard paths
   where appropriate?
