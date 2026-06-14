@@ -59,6 +59,7 @@ private struct SocialGraphTarget: Identifiable, Equatable {
 struct ContentView: View {
     @Environment(\.colorScheme) private var colorScheme
     @EnvironmentObject private var scrobbleService: ScrobbleService
+    @AppStorage("onboarding.firstRunCompleted") private var firstRunOnboardingCompleted = false
     @AppStorage("ui.detailInspectorWidth") private var detailInspectorWidth = 560.0
     @AppStorage("ui.socialInspectorWidth") private var socialInspectorWidth = 860.0
     @State private var selectedTab: WorkspaceTab? = .dashboard
@@ -71,6 +72,7 @@ struct ContentView: View {
     @State private var socialGraphTarget: SocialGraphTarget?
     @State private var selectedProfileURL: URL?
     @State private var isDiagnosticsPresented = false
+    @State private var isOnboardingPresented = false
 
     var body: some View {
         NavigationSplitView {
@@ -309,6 +311,9 @@ struct ContentView: View {
                 }
             }
         }
+        .onAppear {
+            refreshOnboardingPresentation()
+        }
         .onReceive(NotificationCenter.default.publisher(for: AppEvents.showDiagnostics)) { _ in
             isDiagnosticsPresented = true
         }
@@ -318,10 +323,27 @@ struct ContentView: View {
                 await scrobbleService.refreshScrobbles()
             }
         }
+        .onChange(of: firstRunOnboardingCompleted) { _ in
+            refreshOnboardingPresentation()
+        }
+        .onChange(of: scrobbleService.isAuthenticated) { _ in
+            refreshOnboardingPresentation()
+        }
+        .onChange(of: scrobbleService.sessionStatus) { _ in
+            refreshOnboardingPresentation()
+        }
         .sheet(isPresented: $isDiagnosticsPresented) {
             DiagnosticsView()
                 .environmentObject(scrobbleService)
                 .frame(minWidth: 680, minHeight: 520)
+        }
+        .sheet(isPresented: $isOnboardingPresented) {
+            FirstRunOnboardingView(
+                isCompleted: $firstRunOnboardingCompleted,
+                onOpenSettings: openSettingsWindow,
+                onFinish: refreshOnboardingPresentation
+            )
+            .environmentObject(scrobbleService)
         }
     }
 
@@ -346,6 +368,19 @@ struct ContentView: View {
 
     private var appDividerColor: Color {
         colorScheme == .dark ? Color.white.opacity(0.12) : Color.black.opacity(0.12)
+    }
+
+    private var shouldPresentOnboarding: Bool {
+        !firstRunOnboardingCompleted || (!scrobbleService.isAuthenticated && scrobbleService.sessionStatus == "Session invalid")
+    }
+
+    private func refreshOnboardingPresentation() {
+        isOnboardingPresented = shouldPresentOnboarding
+    }
+
+    private func openSettingsWindow() {
+        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
+        NSApp.activate(ignoringOtherApps: true)
     }
 
     @ViewBuilder
