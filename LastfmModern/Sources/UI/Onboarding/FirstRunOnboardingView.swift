@@ -15,16 +15,22 @@ struct FirstRunOnboardingView: View {
     private let steps = OnboardingStep.allCases
 
     var body: some View {
-        NavigationSplitView {
-            List(steps, selection: $selectedStep) { step in
-                Label(step.title, systemImage: step.systemImage)
-                    .tag(step)
-                    .font(.custom("Avenir Next Medium", size: 13))
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("Setup")
+                    .font(.custom("Avenir Next Demi Bold", size: 22))
+                    .padding(.bottom, 8)
+
+                ForEach(steps) { step in
+                    sidebarStepButton(step)
+                }
+
+                Spacer()
             }
-            .navigationTitle("Setup")
-            .listStyle(.sidebar)
-            .navigationSplitViewColumnWidth(min: 190, ideal: 210, max: 260)
-        } detail: {
+            .padding(20)
+            .frame(width: 250)
+            .background(.bar)
+
             ZStack {
                 AppBackdrop()
 
@@ -53,6 +59,34 @@ struct FirstRunOnboardingView: View {
         }
         .interactiveDismissDisabled(!canDismiss)
         .frame(minWidth: 820, idealWidth: 920, minHeight: 560, idealHeight: 620)
+    }
+
+    private func sidebarStepButton(_ step: OnboardingStep) -> some View {
+        Button {
+            selectedStep = step
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: step.systemImage)
+                    .font(.system(size: 16, weight: .semibold))
+                    .frame(width: 22)
+                Text(step.title)
+                    .font(.custom("Avenir Next Medium", size: 13))
+                    .lineLimit(1)
+                Spacer(minLength: 0)
+            }
+            .foregroundStyle(selectedStep == step ? Color.primary : Color.secondary)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 9)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background {
+                if selectedStep == step {
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.accentColor.opacity(0.16))
+                }
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
     }
 
     private var header: some View {
