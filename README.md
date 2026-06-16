@@ -1,15 +1,19 @@
 # lastfm-desktop
 
+> [!IMPORTANT]
+> This repository is archived and will not receive further updates.
+> The code remains available for historical reference only.
+
 This repository now contains:
 
 1. The legacy Qt desktop client (historical codebase).
-2. `LastfmModern`, a modern macOS SwiftUI client focused on Last.fm scrobbling workflows.
+2. `LastfmModern`, a modern macOS SwiftUI client that was focused on Last.fm scrobbling workflows.
    - Uses a single main-window model (plus menu bar controls) for lower overhead.
    - Uses built-in app credentials for normal end-user sign-in.
 
-## Active target: `LastfmModern` (macOS)
+## Final development target: `LastfmModern` (macOS)
 
-Use this for current development.
+This was the final development target before the repository was archived.
 
 - Project: `LastfmModern/LastfmModern.xcodeproj`
 - Platform: macOS (Xcode)
@@ -20,9 +24,9 @@ Use this for current development.
 
 See full app documentation in [LastfmModern/README.md](LastfmModern/README.md).
 
-Recent UI direction worth noting:
+Final UI direction worth noting:
 - The right-hand detail inspector is contextual by entity type and no longer reuses artist-only related content for tracks/albums.
-- Responsive layout work is ongoing, with the inspector already using adaptive breakpoints for narrow, regular, and wide widths.
+- The inspector uses adaptive breakpoints for narrow, regular, and wide widths.
 
 ## Quick start (macOS)
 
